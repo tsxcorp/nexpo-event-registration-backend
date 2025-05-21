@@ -1,28 +1,45 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
-const importExcelRoute = require('./routes/importExcel');
-
 require('dotenv').config();
 
-const eventInfoRoutes = require('./routes/eventInfo');
-const registerRoutes = require('./routes/register');
+const swaggerUi = require('swagger-ui-express');
+const swaggerJsdoc = require('swagger-jsdoc');
 
 const app = express();
 
-// Enable CORS for all origins (can restrict later if needed)
-app.use(cors());
+// === Swagger config ===
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Nexpo Event Backend API',
+      version: '1.0.0',
+      description: 'API backend kết nối Zoho Creator cho hệ thống đăng ký sự kiện Nexpo'
+    }
+  },
+  apis: ['./src/routes/*.js'], // Scan tất cả file route
+};
 
-// Parse application/json
+const swaggerSpec = swaggerJsdoc(swaggerOptions);
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// === Middleware ===
+app.use(cors());
 app.use(bodyParser.json());
 
-// Route declarations
-app.use('/api', eventInfoRoutes);
-app.use('/api', registerRoutes);
-app.use('/import-excel', importExcelRoute); // ✅ mount route ở /import-excel
+// === Route declarations ===
+const eventRoutes = require('./routes/events');               // /api/events/:id
+const registrationRoutes = require('./routes/registrations'); // /api/registrations
+const importRoutes = require('./routes/imports');              // /api/imports
 
-// Start server
+app.use('/api/events', eventRoutes);
+app.use('/api/registrations', registrationRoutes);
+app.use('/api/imports', importRoutes);
+
+// === Start server ===
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 NEXPO Backend server is running on http://localhost:${PORT}`);
+  console.log(`🚀 NEXPO Backend running at http://localhost:${PORT}`);
+  console.log(`📘 Swagger UI available at /docs`);
 });
