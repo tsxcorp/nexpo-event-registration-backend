@@ -2,36 +2,34 @@ const axios = require("axios");
 
 const submitRegistration = async (data) => {
   const formPublicURL =
-    "https://www.zohoapis.com/creator/v2.1/publish/tsxcorp/nxp/form/master_registration?privatelink=A982datdqWF3EW9j6QbEdwG0vWXV3ykHz3D4tSGhvPaX1JwfNTUyyCuhGjhpdDJUEgOKXbpuKktqZ7Ssz8bjZj5Awvfd47DnB59C";
+    "https://www.zohoapis.com/creator/v2.1/publish/tsxcorp/nxp/form/Master_Registration?privatelink=A982datdqWF3EW9j6QbEdwG0vWXV3ykHz3D4tSGhvPaX1JwfNTUyyCuhGjhpdDJUEgOKXbpuKktqZ7Ssz8bjZj5Awvfd47DnB59C";
 
   const groupId = `GRP-${Date.now()}`;
   const groupMembers = Array.isArray(data.group_members) ? data.group_members : [];
-  const eventInfo = data.Event_Info ?? data.event_info ?? null; // 👈 lấy đúng key hoặc fallback
-  const coreKeys = ["title", "full_name", "email", "mobile_number"];
+  const eventInfo = data.Event_Info ?? data.event_info ?? null;
+  const coreKeys = ["Salutation", "Full_Name", "Email", "Phone_Number"];
   const records = [];
 
-  // 1. Người đăng ký chính
+  // Người đăng ký chính
   const mainCore = {};
   const mainCustom = {};
 
   for (const key in data) {
     if (coreKeys.includes(key)) {
       mainCore[key] = data[key];
-    } else if (!["group_members", "custom_fields_value", "Event_Info", "event_info"].includes(key)) {
+    } else if (!["group_members", "Custom_Fields_Value", "Event_Info", "event_info"].includes(key)) {
       mainCustom[key] = data[key];
     }
   }
 
-  const finalCustomFields = data.custom_fields_value || mainCustom;
-
   records.push({
     ...mainCore,
-    custom_fields_value: finalCustomFields,
+    Custom_Fields_Value: data.Custom_Fields_Value || mainCustom,
     Event_Info: eventInfo,
     Group_ID: groupId
   });
 
-  // 2. Các thành viên trong nhóm
+  // Các thành viên trong nhóm
   for (const member of groupMembers) {
     const memberCore = {};
     const memberCustom = {};
@@ -46,7 +44,7 @@ const submitRegistration = async (data) => {
 
     records.push({
       ...memberCore,
-      custom_fields_value: memberCustom,
+      Custom_Fields_Value: memberCustom,
       Event_Info: eventInfo,
       Group_ID: groupId
     });
@@ -57,7 +55,6 @@ const submitRegistration = async (data) => {
 
   for (let i = 0; i < records.length; i++) {
     const payload = { data: records[i] };
-
     console.log("📤 Sending to Zoho:", JSON.stringify(payload, null, 2));
 
     try {
@@ -94,8 +91,8 @@ const submitRegistration = async (data) => {
     group_id: groupId,
     group_members: responses.map((res, i) => ({
       ID: res.data.ID,
-      full_name: records[i].full_name,
-      email: records[i].email
+      Full_Name: records[i].Full_Name,
+      Email: records[i].Email
     }))
   };
 
