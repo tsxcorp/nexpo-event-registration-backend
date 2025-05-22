@@ -59,6 +59,7 @@ const fetchEventDetails = async (eventIdInput) => {
       helptext: field.helptext,
       type: field.type,
       required: field.required,
+      groupmember: field.groupmember,
       ...(["Select", "Multi Select"].includes(field.type) && field.values
         ? { values: field.values }
         : {})
