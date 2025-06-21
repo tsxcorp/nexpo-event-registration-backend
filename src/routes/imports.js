@@ -46,15 +46,18 @@ router.post('/', upload.single('file'), async (req, res) => {
     const results = [];
 
     for (const [i, row] of records.entries()) {
-      const { title, full_name, email, mobile_number, ...custom_fields_value } = row;
-
       const payload = {
-        title,
-        full_name,
-        email,
-        mobile_number,
+        Salutation: row.title || row.salutation || row.Title || row.Salutation,
+        Full_Name: row.full_name || row.Full_Name || row.name || row.Name,
+        Email: row.email || row.Email,
+        Phone_Number: row.mobile_number || row.phone_number || row.Mobile_Number || row.Phone_Number,
         Event_Info: eventId,
-        custom_fields_value,
+        Custom_Fields_Value: Object.fromEntries(
+          Object.entries(row).filter(([key, value]) => {
+            const lowerKey = key.toLowerCase();
+            return !['title', 'salutation', 'full_name', 'name', 'email', 'mobile_number', 'phone_number'].includes(lowerKey) && value !== undefined && value !== null;
+          })
+        )
       };
 
       let success = false;
@@ -64,7 +67,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       while (attempt <= RETRY_LIMIT) {
         try {
           await submitRegistration(payload);
-          results.push({ row: i + 1, status: '✅ Success', email });
+          results.push({ row: i + 1, status: '✅ Success', email: payload.Email });
           success = true;
           break;
         } catch (err) {
@@ -75,7 +78,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       }
 
       if (!success) {
-        results.push({ row: i + 1, status: '❌ Failed', email, error: lastError });
+        results.push({ row: i + 1, status: '❌ Failed', email: payload.Email, error: lastError });
       }
     }
 

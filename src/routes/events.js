@@ -26,7 +26,6 @@ router.get('/', async (req, res) => {
 
   try {
     const result = await fetchEventDetails(eventId);
-
     // // ✨ In ra log để xác định rõ ID dạng gì
     // console.log("👉 Zoho trả về event.id =", result?.event?.id, "typeof =", typeof result?.event?.id);
 

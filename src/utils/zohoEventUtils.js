@@ -62,7 +62,14 @@ const fetchEventDetails = async (eventIdInput) => {
       groupmember: field.groupmember,
       ...(["Select", "Multi Select"].includes(field.type) && field.values
         ? { values: field.values }
-        : {})
+        : {}),
+      ...(field.type === "Agreement" && {
+        title: field.title || field.label,
+        content: field.content,
+        checkbox_label: field.checkbox_label,
+        link_text: field.link_text,
+        link_url: field.link_url
+      })
     }));
 
     return {

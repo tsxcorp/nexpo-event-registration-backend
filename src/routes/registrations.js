@@ -21,18 +21,25 @@ const { submitRegistration } = require('../utils/zohoSubmit');
  *           schema:
  *             type: object
  *             properties:
- *               Full_Name:
+ *               title:
  *                 type: string
- *               Email:
+ *                 description: Salutation (Mr., Ms., etc.)
+ *               full_name:
  *                 type: string
- *               Mobile_Number:
+ *                 description: Full name of the registrant
+ *               email:
  *                 type: string
- *               Custom_Fields_Value:
+ *                 description: Email address
+ *               mobile_number:
+ *                 type: string
+ *                 description: Phone number
+ *               custom_fields_value:
  *                 type: object
+ *                 description: Additional custom fields from the event form
  *             required:
- *               - Full_Name
- *               - Email
- *               - Mobile_Number
+ *               - full_name
+ *               - email
+ *               - mobile_number
  *     responses:
  *       200:
  *         description: Đăng ký thành công
