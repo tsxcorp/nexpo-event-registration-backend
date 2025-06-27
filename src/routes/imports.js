@@ -40,8 +40,24 @@ const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 router.post('/', upload.single('file'), async (req, res) => {
   try {
-    const records = parseExcel(req.file.buffer);
+    // Validate file upload
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded", details: "File is required for import" });
+    }
+    
+    if (!req.file.buffer) {
+      return res.status(400).json({ error: "Invalid file", details: "File buffer is missing" });
+    }
+    
+    // Validate event_id
     const eventId = req.body.event_id;
+    if (!eventId) {
+      return res.status(400).json({ error: "Missing event_id", details: "event_id is required" });
+    }
+    
+    console.log(`📄 Processing import for event: ${eventId}, file size: ${req.file.buffer.length} bytes`);
+    
+    const records = parseExcel(req.file.buffer);
 
     const results = [];
 
