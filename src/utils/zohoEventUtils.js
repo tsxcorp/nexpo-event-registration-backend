@@ -52,25 +52,39 @@ const fetchEventDetails = async (eventIdInput) => {
 
     const safeEventId = String(eventIdInput); // 🟢 Dùng ID từ query param
 
-    // 🔄 Xử lý formFields thêm "value" nếu là Select hoặc Multi Select
-    const enrichedFields = (eventData.formFields || []).map(field => ({
-      sort: field.sort,
-      label: field.label,
-      helptext: field.helptext,
-      type: field.type,
-      required: field.required,
-      groupmember: field.groupmember,
-      ...(["Select", "Multi Select"].includes(field.type) && field.values
-        ? { values: field.values }
-        : {}),
-      ...(field.type === "Agreement" && {
-        title: field.title || field.label,
-        content: field.content,
-        checkbox_label: field.checkbox_label,
-        link_text: field.link_text,
-        link_url: field.link_url
-      })
-    }));
+    // 🔄 Xử lý formFields để bao gồm tất cả properties có sẵn
+    const enrichedFields = (eventData.formFields || []).map(field => {
+      const processedField = {
+        sort: field.sort,
+        label: field.label,
+        type: field.type,
+        required: field.required,
+        groupmember: field.groupmember,
+        helptext: field.helptext || "",
+        placeholder: field.placeholder || "",
+        field_condition: field.field_condition || "",
+        section_name: field.section_name || "",
+        section_sort: field.section_sort || 0,
+        section_condition: field.section_condition || "",
+        matching_field: field.matching_field || false
+      };
+
+      // Thêm values cho Select và Multi Select
+      if (["Select", "Multi Select"].includes(field.type) && field.values) {
+        processedField.values = field.values;
+      }
+
+      // Thêm các properties cho Agreement fields
+      if (field.type === "Agreement") {
+        processedField.title = field.title || "";
+        processedField.content = field.content || "";
+        processedField.checkbox_label = field.checkbox_label || "";
+        processedField.link_text = field.link_text || "";
+        processedField.link_url = field.link_url || "";
+      }
+
+      return processedField;
+    });
 
     return {
       event: {
