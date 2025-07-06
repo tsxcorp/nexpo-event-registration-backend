@@ -53,12 +53,18 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                     footer:
  *                       type: string
  *                       description: URL footer image
+ *                     favicon:
+ *                       type: string
+ *                       description: URL favicon của sự kiện
  *                     formFields:
  *                       type: array
  *                       description: Danh sách các field trong form đăng ký
  *                       items:
  *                         type: object
  *                         properties:
+ *                           field_id:
+ *                             type: string
+ *                             description: ID duy nhất của field trong Zoho
  *                           sort:
  *                             type: integer
  *                             description: Thứ tự hiển thị field
@@ -86,6 +92,9 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                           field_condition:
  *                             type: string
  *                             description: Điều kiện hiển thị field
+ *                           section_id:
+ *                             type: string
+ *                             description: ID của section chứa field
  *                           section_name:
  *                             type: string
  *                             description: Tên section chứa field

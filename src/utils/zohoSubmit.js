@@ -1,5 +1,47 @@
 const axios = require("axios");
 
+/**
+ * Process Custom_Fields_Value to handle both field_id and field label formats
+ * This provides backward compatibility during the transition period
+ */
+const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
+  if (!customFieldsValue || typeof customFieldsValue !== 'object') {
+    return {};
+  }
+
+  console.log('🔄 Processing Custom_Fields_Value:', customFieldsValue);
+  console.log('📋 Available field definitions:', fieldDefinitions.length);
+
+  const processedFields = {};
+  
+  Object.entries(customFieldsValue).forEach(([key, value]) => {
+    // Check if key is already a field_id format
+    const fieldByFieldId = fieldDefinitions.find(f => f.field_id === key);
+    if (fieldByFieldId) {
+      // New format: key is field_id
+      processedFields[key] = value;
+      console.log(`✅ Field ID format detected: ${key} = ${value}`);
+      return;
+    }
+    
+    // Check if key is a field label (backward compatibility)
+    const fieldByLabel = fieldDefinitions.find(f => f.label === key);
+    if (fieldByLabel && fieldByLabel.field_id) {
+      // Old format: key is label, convert to field_id
+      processedFields[fieldByLabel.field_id] = value;
+      console.log(`🔄 Converted label to field_id: "${key}" → "${fieldByLabel.field_id}" = ${value}`);
+      return;
+    }
+    
+    // If no match found, keep original key (for unknown fields or core fields)
+    processedFields[key] = value;
+    console.log(`⚠️ No field mapping found for: "${key}", keeping original key`);
+  });
+  
+  console.log('📋 Final processed custom fields:', processedFields);
+  return processedFields;
+};
+
 const submitRegistration = async (data) => {
   const formPublicURL =
     "https://www.zohoapis.com/creator/v2.1/publish/tsxcorp/nxp/form/Master_Registration?privatelink=A982datdqWF3EW9j6QbEdwG0vWXV3ykHz3D4tSGhvPaX1JwfNTUyyCuhGjhpdDJUEgOKXbpuKktqZ7Ssz8bjZj5Awvfd47DnB59C";
@@ -8,6 +50,10 @@ const submitRegistration = async (data) => {
   const mainRecordData = data;
   const groupMembers = Array.isArray(data.group_members) ? data.group_members : [];
   const eventInfo = data.Event_Info ?? data.event_info ?? null;
+  
+  // Get field definitions for processing (if available)
+  // Note: In a real implementation, you might want to fetch this from your event data
+  const fieldDefinitions = data.fieldDefinitions || [];
   
   const records = [];
 
@@ -21,9 +67,10 @@ const submitRegistration = async (data) => {
     Phone_Number: mainRecordData.Phone_Number,
   };
 
-  // Directly attach the Custom_Fields_Value object from the main registrant
+  // Process the Custom_Fields_Value object from the main registrant
   if (mainRecordData.Custom_Fields_Value && Object.keys(mainRecordData.Custom_Fields_Value).length > 0) {
-    mainRecord.Custom_Fields_Value = mainRecordData.Custom_Fields_Value;
+    const processedCustomFields = processCustomFields(mainRecordData.Custom_Fields_Value, fieldDefinitions);
+    mainRecord.Custom_Fields_Value = processedCustomFields;
   }
   records.push(mainRecord);
 
@@ -45,9 +92,10 @@ const submitRegistration = async (data) => {
       }
     }
     
-    // Attach the collected custom fields for the member
+    // Process the collected custom fields for the member
     if (Object.keys(customFields).length > 0) {
-      memberRecord.Custom_Fields_Value = customFields;
+      const processedCustomFields = processCustomFields(customFields, fieldDefinitions);
+      memberRecord.Custom_Fields_Value = processedCustomFields;
     }
     
     records.push(memberRecord);

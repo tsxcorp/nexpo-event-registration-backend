@@ -53,8 +53,9 @@ const fetchEventDetails = async (eventIdInput) => {
     const safeEventId = String(eventIdInput); // 🟢 Dùng ID từ query param
 
     // 🔄 Xử lý formFields để bao gồm tất cả properties có sẵn
-    const enrichedFields = (eventData.formFields || []).map(field => {
+    const enrichedFields = (eventData.formFields || []).map((field, index) => {
       const processedField = {
+        field_id: field.field_id || `auto_field_${index}`, // Auto-generate if missing
         sort: field.sort,
         label: field.label,
         type: field.type,
@@ -63,11 +64,17 @@ const fetchEventDetails = async (eventIdInput) => {
         helptext: field.helptext || "",
         placeholder: field.placeholder || "",
         field_condition: field.field_condition || "",
+        section_id: field.section_id || "",
         section_name: field.section_name || "",
         section_sort: field.section_sort || 0,
         section_condition: field.section_condition || "",
         matching_field: field.matching_field || false
       };
+
+      // Log field_id status for debugging
+      if (!field.field_id) {
+        console.warn(`⚠️ Field missing field_id, auto-generated: ${field.label} → ${processedField.field_id}`);
+      }
 
       // Thêm values cho Select và Multi Select
       if (["Select", "Multi Select"].includes(field.type) && field.values) {
@@ -96,7 +103,8 @@ const fetchEventDetails = async (eventIdInput) => {
         banner: getPublicImageUrl(safeEventId, "Banner", eventData.banner),
         logo: getPublicImageUrl(safeEventId, "Logo", eventData.logo),
         header: getPublicImageUrl(safeEventId, "Header", eventData.header),
-        footer: getPublicImageUrl(safeEventId, "Footer", eventData.footer)
+        footer: getPublicImageUrl(safeEventId, "Footer", eventData.footer),
+        favicon: getPublicImageUrl(safeEventId, "Favicon", eventData.favicon)
       },
       gallery: getGalleryImageUrls(eventData.gelleryid, eventData.gallery)
     };
