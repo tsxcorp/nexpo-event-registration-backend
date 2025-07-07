@@ -41,6 +41,17 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                     email:
  *                       type: string
  *                       description: Email liên hệ của sự kiện
+ *                     location:
+ *                       type: string
+ *                       description: Địa điểm tổ chức sự kiện
+ *                     start_date:
+ *                       type: string
+ *                       description: Ngày bắt đầu sự kiện
+ *                       example: "2025-08-24 08:00:00.0"
+ *                     end_date:
+ *                       type: string
+ *                       description: Ngày kết thúc sự kiện
+ *                       example: "2025-08-29 17:00:00.0"
  *                     logo:
  *                       type: string
  *                       description: URL logo của sự kiện
