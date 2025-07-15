@@ -1,0 +1,167 @@
+const express = require('express');
+const router = express.Router();
+const { fetchVisitorDetails } = require('../utils/zohoVisitorUtils');
+
+/**
+ * @swagger
+ * /api/visitors:
+ *   get:
+ *     summary: Lấy thông tin chi tiết visitor từ Zoho Creator
+ *     description: API trả về thông tin đầy đủ của visitor đã đăng ký sự kiện
+ *     parameters:
+ *       - in: query
+ *         name: visid
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của visitor trong Zoho Creator
+ *         example: "4433256000012345678"
+ *     responses:
+ *       200:
+ *         description: Dữ liệu visitor thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 visitor:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       description: ID của visitor
+ *                       example: "4433256000012345678"
+ *                     name:
+ *                       type: string
+ *                       description: Tên đầy đủ của visitor
+ *                       example: "Nguyen Van A"
+ *                     email:
+ *                       type: string
+ *                       description: Email của visitor
+ *                       example: "nguyenvana@example.com"
+ *                     phone:
+ *                       type: string
+ *                       description: Số điện thoại
+ *                       example: "0901234567"
+ *                     company:
+ *                       type: string
+ *                       description: Tên công ty
+ *                       example: "ABC Corporation"
+ *                     job_title:
+ *                       type: string
+ *                       description: Chức vụ
+ *                       example: "Manager"
+ *                     registration_date:
+ *                       type: string
+ *                       description: Ngày đăng ký
+ *                       example: "2025-01-15 10:30:00.0"
+ *                     status:
+ *                       type: string
+ *                       description: Trạng thái đăng ký
+ *                       example: "confirmed"
+ *                     event_id:
+ *                       type: string
+ *                       description: ID sự kiện đã đăng ký
+ *                       example: "4433256000012332047"
+ *                     event_name:
+ *                       type: string
+ *                       description: Tên sự kiện
+ *                       example: "Automation World VietNam"
+ *                     group_id:
+ *                       type: string
+ *                       description: ID nhóm đăng ký (nếu có)
+ *                       example: "GRP-1750414070451"
+ *                     group_redeem_id:
+ *                       type: string
+ *                       description: ID redeem của nhóm
+ *                     badge_qr:
+ *                       type: string
+ *                       description: QR code của badge
+ *                     redeem_qr:
+ *                       type: string
+ *                       description: QR code để redeem
+ *                     redeem_id:
+ *                       type: string
+ *                       description: ID redeem
+ *                     encrypt_key:
+ *                       type: string
+ *                       description: Key mã hóa
+ *                     head_mark:
+ *                       type: boolean
+ *                       description: Đánh dấu head
+ *                     check_in_history:
+ *                       type: array
+ *                       description: Lịch sử check-in
+ *                       items:
+ *                         type: object
+ *                     custom_fields:
+ *                       type: object
+ *                       description: Các trường custom đã điền
+ *                       example: {"Job Function": "TECH", "Job Title": "Engineer"}
+ *                     formFields:
+ *                       type: array
+ *                       description: Danh sách các field trong form (nếu có)
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           field_id:
+ *                             type: string
+ *                             description: ID duy nhất của field
+ *                           sort:
+ *                             type: integer
+ *                             description: Thứ tự hiển thị field
+ *                           label:
+ *                             type: string
+ *                             description: Nhãn hiển thị của field
+ *                           type:
+ *                             type: string
+ *                             description: Loại field
+ *                           required:
+ *                             type: boolean
+ *                             description: Field có bắt buộc không
+ *                           values:
+ *                             type: array
+ *                             description: Danh sách options (nếu có)
+ *                             items:
+ *                               type: string
+ *       400:
+ *         description: Thiếu visid parameter
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Missing visid"
+ *       500:
+ *         description: Lỗi khi lấy dữ liệu từ Zoho
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to fetch visitor data"
+ *                 details:
+ *                   type: string
+ *                   description: Chi tiết lỗi
+ */
+
+router.get('/', async (req, res) => {
+  const visitorId = req.query.visid;
+  if (!visitorId) return res.status(400).json({ error: 'Missing visid' });
+
+  try {
+    const result = await fetchVisitorDetails(visitorId);
+    console.log("✅ Visitor data fetched successfully for ID:", visitorId);
+    
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("❌ Error fetching visitor data:", err.message);
+    res.status(500).json({ error: 'Failed to fetch visitor data', details: err.message });
+  }
+});
+
+module.exports = router; 

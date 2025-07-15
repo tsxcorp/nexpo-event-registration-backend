@@ -32,10 +32,12 @@ app.use(bodyParser.json());
 const eventRoutes = require('./routes/events');               // /api/events/:id
 const registrationRoutes = require('./routes/registrations'); // /api/registrations
 const importRoutes = require('./routes/imports');              // /api/imports
+const visitorRoutes = require('./routes/visitors');           // /api/visitors
 
 app.use('/api/events', eventRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/imports', importRoutes);
+app.use('/api/visitors', visitorRoutes);
 
 // === Start server ===
 const PORT = process.env.PORT || 3000;

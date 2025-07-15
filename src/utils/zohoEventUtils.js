@@ -6,7 +6,8 @@ const {
   ZOHO_BASE_URL,
   ZOHO_PUBLIC_KEY,
   ZOHO_PRIVATELINK_ALL_EVENTS,
-  ZOHO_PRIVATELINK_GALLERY
+  ZOHO_PRIVATELINK_GALLERY,
+  ZOHO_PRIVATELINK_EXHIBITOR_PROFILES
 } = process.env;
 
 // 📸 Build public image URL
@@ -21,6 +22,12 @@ const getGalleryImageUrls = (galleryId, galleryObj) => {
   return galleryObj.obj.map(imagePath => {
     return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Event_Libraries/${galleryId}/Upload_Image/image-download/${ZOHO_PRIVATELINK_GALLERY}?filepath=/${imagePath.trim()}`;
   });
+};
+
+// 🏢 Build public exhibitor image URLs
+const getExhibitorImageUrl = (recordId, fieldName, filePath) => {
+  if (!filePath) return "";
+  return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Exhibitor_Profiles/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_EXHIBITOR_PROFILES}?filepath=/${filePath}`;
 };
 
 // 🚀 Fetch full event data from Zoho Creator Custom API
@@ -93,6 +100,40 @@ const fetchEventDetails = async (eventIdInput) => {
       return processedField;
     });
 
+    // 🏢 Xử lý exhibitors data
+    const processedExhibitors = (eventData.exhibitors || []).map(exhibitor => {
+      return {
+        exhibitor_profile_id: exhibitor.exhibitor_profile_id ? String(exhibitor.exhibitor_profile_id) : "",
+        display_name: exhibitor.display_name || "",
+        booth_no: exhibitor.booth_no || "",
+        country: exhibitor.country || "",
+        email: exhibitor.email || "",
+        tel: exhibitor.tel || "",
+        mobile: exhibitor.mobile || "",
+        fax: exhibitor.fax || "",
+        website: exhibitor.website || "",
+        zip_code: exhibitor.zip_code || "",
+        vie_address: exhibitor.vie_address || "",
+        eng_address: exhibitor.eng_address || "",
+        vie_company_description: exhibitor.vie_company_description || "",
+        eng_company_description: exhibitor.eng_company_description || "",
+        vie_display_products: exhibitor.vie_display_products || "",
+        eng_display_products: exhibitor.eng_display_products || "",
+        introduction_video: exhibitor.introduction_video || "",
+        company_logo: exhibitor.company_logo ? getExhibitorImageUrl(String(exhibitor.exhibitor_profile_id), "Company_Logo", exhibitor.company_logo) : "",
+        cover_image: exhibitor.cover_image ? getExhibitorImageUrl(String(exhibitor.exhibitor_profile_id), "Cover_Image", exhibitor.cover_image) : ""
+      };
+    });
+
+    // 🖼️ Xử lý gallery - support both old and new structure
+    let galleryUrls = [];
+    if (eventData.gallery && eventData.gallery.obj && Array.isArray(eventData.gallery.obj)) {
+      galleryUrls = getGalleryImageUrls(eventData.gelleryid, eventData.gallery);
+    } else if (Array.isArray(eventData.gallery)) {
+      // Support old structure
+      galleryUrls = getGalleryImageUrls(eventData.gelleryid, { obj: eventData.gallery });
+    }
+
     return {
       event: {
         id: safeEventId,
@@ -103,13 +144,14 @@ const fetchEventDetails = async (eventIdInput) => {
         start_date: eventData.start_date || "",
         end_date: eventData.end_date || "",
         formFields: enrichedFields,
+        exhibitors: processedExhibitors,
         banner: getPublicImageUrl(safeEventId, "Banner", eventData.banner),
         logo: getPublicImageUrl(safeEventId, "Logo", eventData.logo),
         header: getPublicImageUrl(safeEventId, "Header", eventData.header),
         footer: getPublicImageUrl(safeEventId, "Footer", eventData.footer),
         favicon: getPublicImageUrl(safeEventId, "Favicon", eventData.favicon)
       },
-      gallery: getGalleryImageUrls(eventData.gelleryid, eventData.gallery)
+      gallery: galleryUrls
     };
   } catch (err) {
     console.error("❌ Error in fetchEventDetails:", err.message);

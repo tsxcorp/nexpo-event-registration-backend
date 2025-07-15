@@ -7,7 +7,7 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  * /api/events:
  *   get:
  *     summary: Lấy thông tin chi tiết sự kiện từ Zoho Creator
- *     description: API trả về thông tin đầy đủ của sự kiện bao gồm form fields, sections, và media
+ *     description: API trả về thông tin đầy đủ của sự kiện bao gồm form fields, sections, media, và danh sách exhibitors
  *     parameters:
  *       - in: query
  *         name: eventId
@@ -34,7 +34,7 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                     name:
  *                       type: string
  *                       description: Tên sự kiện
- *                       example: "Automation World VietNam"
+ *                       example: "VIET NAM INTERNATIONAL LOGISTICS EXHIBITION 2025"
  *                     description:
  *                       type: string
  *                       description: Mô tả sự kiện (có thể chứa HTML)
@@ -47,11 +47,11 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                     start_date:
  *                       type: string
  *                       description: Ngày bắt đầu sự kiện
- *                       example: "2025-08-24 08:00:00.0"
+ *                       example: "2025-07-31 09:00:00.0"
  *                     end_date:
  *                       type: string
  *                       description: Ngày kết thúc sự kiện
- *                       example: "2025-08-29 17:00:00.0"
+ *                       example: "2025-08-02 17:00:00.0"
  *                     logo:
  *                       type: string
  *                       description: URL logo của sự kiện
@@ -136,6 +136,69 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                           matching_field:
  *                             type: boolean
  *                             description: Field có dùng để matching không
+ *                     exhibitors:
+ *                       type: array
+ *                       description: Danh sách các exhibitor tham gia sự kiện
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           exhibitor_profile_id:
+ *                             type: string
+ *                             description: ID duy nhất của exhibitor profile trong Zoho
+ *                           display_name:
+ *                             type: string
+ *                             description: Tên hiển thị của exhibitor
+ *                           booth_no:
+ *                             type: string
+ *                             description: Số gian hàng của exhibitor
+ *                           country:
+ *                             type: string
+ *                             description: Quốc gia của exhibitor
+ *                           email:
+ *                             type: string
+ *                             description: Email liên hệ
+ *                           tel:
+ *                             type: string
+ *                             description: Số điện thoại cố định
+ *                           mobile:
+ *                             type: string
+ *                             description: Số điện thoại di động
+ *                           fax:
+ *                             type: string
+ *                             description: Số fax
+ *                           website:
+ *                             type: string
+ *                             description: Website (có thể chứa HTML link)
+ *                           zip_code:
+ *                             type: string
+ *                             description: Mã bưu chính
+ *                           vie_address:
+ *                             type: string
+ *                             description: Địa chỉ tiếng Việt
+ *                           eng_address:
+ *                             type: string
+ *                             description: Địa chỉ tiếng Anh
+ *                           vie_company_description:
+ *                             type: string
+ *                             description: Mô tả công ty tiếng Việt (có thể chứa HTML)
+ *                           eng_company_description:
+ *                             type: string
+ *                             description: Mô tả công ty tiếng Anh (có thể chứa HTML)
+ *                           vie_display_products:
+ *                             type: string
+ *                             description: Sản phẩm hiển thị tiếng Việt
+ *                           eng_display_products:
+ *                             type: string
+ *                             description: Sản phẩm hiển thị tiếng Anh
+ *                           introduction_video:
+ *                             type: string
+ *                             description: Video giới thiệu (có thể chứa HTML link)
+ *                           company_logo:
+ *                             type: string
+ *                             description: URL logo công ty (đã process thành public URL)
+ *                           cover_image:
+ *                             type: string
+ *                             description: URL ảnh cover (đã process thành public URL)
  *                 gallery:
  *                   type: array
  *                   description: Danh sách URL hình ảnh gallery
