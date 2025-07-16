@@ -106,6 +106,7 @@ const fetchEventDetails = async (eventIdInput) => {
         exhibitor_profile_id: exhibitor.exhibitor_profile_id ? String(exhibitor.exhibitor_profile_id) : "",
         display_name: exhibitor.display_name || "",
         booth_no: exhibitor.booth_no || "",
+        category: exhibitor.category || "",
         country: exhibitor.country || "",
         email: exhibitor.email || "",
         tel: exhibitor.tel || "",

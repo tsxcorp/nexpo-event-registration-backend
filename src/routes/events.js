@@ -151,6 +151,9 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                           booth_no:
  *                             type: string
  *                             description: Số gian hàng của exhibitor
+ *                           category:
+ *                             type: string
+ *                             description: Danh mục/ngành nghề của exhibitor
  *                           country:
  *                             type: string
  *                             description: Quốc gia của exhibitor
