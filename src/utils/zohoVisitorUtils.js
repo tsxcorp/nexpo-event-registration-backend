@@ -5,6 +5,7 @@ const {
   ZOHO_APP_NAME,
   ZOHO_BASE_URL,
   ZOHO_VISITOR_PUBLIC_KEY,
+  ZOHO_CHECKIN_PUBLIC_KEY,
   ZOHO_PRIVATELINK_ALL_EVENTS,
   ZOHO_PRIVATELINK_GALLERY
 } = process.env;
@@ -154,4 +155,42 @@ const fetchVisitorDetails = async (visitorIdInput) => {
   }
 };
 
-module.exports = { fetchVisitorDetails }; 
+// 🚀 Submit check-in data to Zoho Creator
+const submitCheckin = async (visitorData) => {
+  const apiUrl = `${ZOHO_BASE_URL}/creator/custom/${ZOHO_ORG_NAME}/NXP_submitCheckin`;
+
+  try {
+    console.log("🔄 Submitting check-in data to:", apiUrl);
+    console.log("📋 Check-in payload:", JSON.stringify(visitorData, null, 2));
+
+    const response = await axios.post(apiUrl, visitorData, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      params: {
+        publickey: ZOHO_CHECKIN_PUBLIC_KEY
+      }
+    });
+
+    console.log("✅ Check-in response:", response.data);
+
+    // Check if submission was successful
+    if (response.data?.code === 3000) {
+      return {
+        success: true,
+        message: "Check-in submitted successfully",
+        data: response.data
+      };
+    } else {
+      throw new Error(`Check-in submission failed: ${response.data?.message || 'Unknown error'} (Code: ${response.data?.code})`);
+    }
+
+  } catch (err) {
+    console.error("❌ Error in submitCheckin:", err.message);
+    console.error("❌ Error details:", err.response?.data || err.stack);
+    throw new Error(`Failed to submit check-in: ${err.response?.data?.message || err.message}`);
+  }
+};
+
+module.exports = { fetchVisitorDetails, submitCheckin }; 

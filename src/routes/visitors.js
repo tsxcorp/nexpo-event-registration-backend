@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { fetchVisitorDetails } = require('../utils/zohoVisitorUtils');
+const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtils');
 
 /**
  * @swagger
@@ -161,6 +161,161 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error("❌ Error fetching visitor data:", err.message);
     res.status(500).json({ error: 'Failed to fetch visitor data', details: err.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/visitors/checkin:
+ *   post:
+ *     summary: Submit check-in data for a visitor
+ *     description: Submit visitor check-in information to Zoho Creator
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               visitor:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: string
+ *                     description: ID của visitor
+ *                     example: "4433256000013160039"
+ *                   name:
+ *                     type: string
+ *                     description: Tên đầy đủ của visitor
+ *                     example: "NGUYỄN THÁI PHI"
+ *                   email:
+ *                     type: string
+ *                     description: Email của visitor
+ *                     example: "ceo@ozcorp.vn"
+ *                   phone:
+ *                     type: string
+ *                     description: Số điện thoại
+ *                     example: "+840901234567"
+ *                   company:
+ *                     type: string
+ *                     description: Tên công ty
+ *                     example: "ABC Corporation"
+ *                   job_title:
+ *                     type: string
+ *                     description: Chức vụ
+ *                     example: "CEO"
+ *                   registration_date:
+ *                     type: string
+ *                     description: Ngày đăng ký
+ *                   status:
+ *                     type: string
+ *                     description: Trạng thái đăng ký
+ *                   event_id:
+ *                     type: string
+ *                     description: ID sự kiện
+ *                     example: "4433256000013114003"
+ *                   event_name:
+ *                     type: string
+ *                     description: Tên sự kiện
+ *                     example: "CHUỖI SỰ KIỆN THÁNG 07"
+ *                   group_id:
+ *                     type: string
+ *                     description: ID nhóm đăng ký
+ *                     example: "GRP-1752671254685"
+ *                   group_redeem_id:
+ *                     type: string
+ *                     description: ID redeem của nhóm
+ *                   badge_qr:
+ *                     type: string
+ *                     description: QR code của badge
+ *                     example: "NDQzMzI1NjAwMDAxMzE2MDAzOQ=="
+ *                   redeem_qr:
+ *                     type: string
+ *                     description: QR code để redeem
+ *                     example: "CNG10001131"
+ *                   redeem_id:
+ *                     type: string
+ *                     description: ID redeem
+ *                     example: "CNG10001131"
+ *                   encrypt_key:
+ *                     type: string
+ *                     description: Key mã hóa
+ *                     example: "NDQzMzI1NjAwMDAxMzE2MDAzOQ=="
+ *                   head_mark:
+ *                     type: boolean
+ *                     description: Đánh dấu head
+ *                     example: false
+ *                   check_in_history:
+ *                     type: array
+ *                     description: Lịch sử check-in
+ *                     items:
+ *                       type: object
+ *                   custom_fields:
+ *                     type: string
+ *                     description: Các trường custom (JSON string)
+ *                     example: "{\"Bạn sẽ tham dự chương trình\":\"\",\"Tên Công Ty\":\"CÔNG TY XD KIẾN TRÚC ÂN GIA\"}"
+ *                   formFields:
+ *                     type: array
+ *                     description: Danh sách các field trong form
+ *                     items:
+ *                       type: object
+ *     responses:
+ *       200:
+ *         description: Check-in thành công
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Check-in submitted successfully"
+ *                 data:
+ *                   type: object
+ *                   description: Response data từ Zoho
+ *       400:
+ *         description: Thiếu dữ liệu visitor
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Missing visitor data"
+ *       500:
+ *         description: Lỗi khi submit check-in
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to submit check-in"
+ *                 details:
+ *                   type: string
+ *                   description: Chi tiết lỗi
+ */
+
+router.post('/checkin', async (req, res) => {
+  const { visitor } = req.body;
+  
+  if (!visitor) {
+    return res.status(400).json({ error: 'Missing visitor data' });
+  }
+
+  try {
+    const result = await submitCheckin({ visitor });
+    console.log("✅ Check-in submitted successfully for visitor:", visitor.id);
+    
+    res.status(200).json(result);
+  } catch (err) {
+    console.error("❌ Error submitting check-in:", err.message);
+    res.status(500).json({ error: 'Failed to submit check-in', details: err.message });
   }
 });
 
