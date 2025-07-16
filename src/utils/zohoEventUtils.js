@@ -144,6 +144,8 @@ const fetchEventDetails = async (eventIdInput) => {
         location: eventData.location || "",
         start_date: eventData.start_date || "",
         end_date: eventData.end_date || "",
+        badge_size: eventData.badge_size || "",
+        badge_custom_content: eventData.badge_custom_content || {},
         formFields: enrichedFields,
         exhibitors: processedExhibitors,
         banner: getPublicImageUrl(safeEventId, "Banner", eventData.banner),

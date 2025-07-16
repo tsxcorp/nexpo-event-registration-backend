@@ -52,6 +52,26 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                       type: string
  *                       description: Ngày kết thúc sự kiện
  *                       example: "2025-08-02 17:00:00.0"
+ *                     badge_size:
+ *                       type: string
+ *                       description: Kích thước thẻ đeo (format "W123 x H123 mm")
+ *                       example: "W85 x H54 mm"
+ *                     badge_custom_content:
+ *                       type: object
+ *                       description: Cấu hình nội dung hiển thị trên thẻ đeo
+ *                       properties:
+ *                         name:
+ *                           type: boolean
+ *                           description: Hiển thị tên hay không
+ *                           example: true
+ *                         company:
+ *                           type: boolean
+ *                           description: Hiển thị tên công ty hay không
+ *                           example: true
+ *                         job_title:
+ *                           type: boolean
+ *                           description: Hiển thị chức vụ hay không
+ *                           example: false
  *                     logo:
  *                       type: string
  *                       description: URL logo của sự kiện
