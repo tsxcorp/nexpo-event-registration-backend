@@ -76,7 +76,7 @@ const fetchVisitorDetails = async (visitorIdInput) => {
       throw new Error("No visitor data found in Zoho response");
     }
 
-    const safeVisitorId = String(visitorIdInput); // 🟢 Dùng ID từ query param
+    const safeVisitorId = String(visitorData.id); // 🟢 Dùng ID từ Zoho response
 
     // 🔄 Xử lý formFields nếu có (tương tự events)
     const enrichedFields = (visitorData.formFields || []).map((field, index) => {
