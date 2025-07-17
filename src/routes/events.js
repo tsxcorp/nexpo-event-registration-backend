@@ -72,6 +72,10 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                           type: boolean
  *                           description: Hiển thị chức vụ hay không
  *                           example: false
+ *                     badge_printing:
+ *                       type: boolean
+ *                       description: Xác định xem event có in badge hay không
+ *                       example: true
  *                     logo:
  *                       type: string
  *                       description: URL logo của sự kiện
