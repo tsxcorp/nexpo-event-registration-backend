@@ -33,11 +33,13 @@ const eventRoutes = require('./routes/events');               // /api/events/:id
 const registrationRoutes = require('./routes/registrations'); // /api/registrations
 const importRoutes = require('./routes/imports');              // /api/imports
 const visitorRoutes = require('./routes/visitors');           // /api/visitors
+const businessMatchingRoutes = require('./routes/businessMatching'); // /api/business-matching
 
 app.use('/api/events', eventRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/imports', importRoutes);
 app.use('/api/visitors', visitorRoutes);
+app.use('/api/business-matching', businessMatchingRoutes);
 
 // === Start server ===
 const PORT = process.env.PORT || 3000;
