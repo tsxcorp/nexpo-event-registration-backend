@@ -172,6 +172,14 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                           display_name:
  *                             type: string
  *                             description: Tên hiển thị của exhibitor
+ *                           en_company_name:
+ *                             type: string
+ *                             description: Tên công ty (tiếng Anh)
+ *                             example: "ABC Corporation Ltd."
+ *                           vi_company_name:
+ *                             type: string
+ *                             description: Tên công ty (tiếng Việt)
+ *                             example: "Công ty TNHH ABC"
  *                           booth_no:
  *                             type: string
  *                             description: Số gian hàng của exhibitor
@@ -226,6 +234,62 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                           cover_image:
  *                             type: string
  *                             description: URL ảnh cover (đã process thành public URL)
+ *                           en_company_name:
+ *                             type: string
+ *                             description: Tên công ty tổ chức (tiếng Anh)
+ *                           vi_company_name:
+ *                             type: string
+ *                             description: Tên công ty tổ chức (tiếng Việt)
+ *                     sessions:
+ *                       type: array
+ *                       description: Danh sách các session/hội thảo trong sự kiện
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             description: ID duy nhất của session trong Zoho
+ *                             example: "4433256000012707023"
+ *                           title:
+ *                             type: string
+ *                             description: Tiêu đề của session/hội thảo
+ *                             example: "Hội thảo về Chương trình Đại lý Hàng hóa Hàng không IATA"
+ *                           date:
+ *                             type: string
+ *                             description: Ngày diễn ra session
+ *                             example: "2025-07-31"
+ *                           start_time:
+ *                             type: string
+ *                             description: Thời gian bắt đầu (HH:MM:SS)
+ *                             example: "13:30:00"
+ *                           end_time:
+ *                             type: string
+ *                             description: Thời gian kết thúc (HH:MM:SS)
+ *                             example: "15:00:00"
+ *                           description:
+ *                             type: string
+ *                             description: Mô tả chi tiết session (có thể chứa HTML)
+ *                             example: "<div>Hiệp hội Vận tải Hàng không Quốc tế (IATA), VINEXAD<br /></div>"
+ *                           speaker_name:
+ *                             type: string
+ *                             description: Tên diễn giả/tổ chức
+ *                             example: "Hiệp hội Vận tải Hàng không Quốc tế (IATA), VINEXAD"
+ *                           speaker_id:
+ *                             type: string
+ *                             description: ID của diễn giả trong Zoho
+ *                             example: "4433256000013270007"
+ *                           area_name:
+ *                             type: string
+ *                             description: Tên khu vực/phòng diễn ra session
+ *                             example: "Khu VILOG TALK Nhà B1, SECC"
+ *                           area_id:
+ *                             type: string
+ *                             description: ID của khu vực trong Zoho
+ *                             example: "4433256000013270011"
+ *                           session_accessibility:
+ *                             type: string
+ *                             description: Phạm vi truy cập session
+ *                             example: "All ticket classes"
  *                 gallery:
  *                   type: array
  *                   description: Danh sách URL hình ảnh gallery

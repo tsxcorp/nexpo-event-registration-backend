@@ -105,6 +105,8 @@ const fetchEventDetails = async (eventIdInput) => {
       return {
         exhibitor_profile_id: exhibitor.exhibitor_profile_id ? String(exhibitor.exhibitor_profile_id) : "",
         display_name: exhibitor.display_name || "",
+        en_company_name: exhibitor.en_company_name || "",
+        vi_company_name: exhibitor.vi_company_name || "",
         booth_no: exhibitor.booth_no || "",
         category: exhibitor.category || "",
         country: exhibitor.country || "",
@@ -135,6 +137,23 @@ const fetchEventDetails = async (eventIdInput) => {
       galleryUrls = getGalleryImageUrls(eventData.gelleryid, { obj: eventData.gallery });
     }
 
+    // 📅 Xử lý sessions data
+    const processedSessions = (eventData.sessions || []).map(session => {
+      return {
+        id: session.id ? String(session.id) : "",
+        title: session.title || "",
+        date: session.date || "",
+        start_time: session.start_time || "",
+        end_time: session.end_time || "",
+        description: session.description || "",
+        speaker_name: session.speaker_name || "",
+        speaker_id: session.speaker_id ? String(session.speaker_id) : "",
+        area_name: session.area_name || "",
+        area_id: session.area_id ? String(session.area_id) : "",
+        session_accessibility: session.session_accessibility || ""
+      };
+    });
+
     return {
       event: {
         id: safeEventId,
@@ -149,6 +168,7 @@ const fetchEventDetails = async (eventIdInput) => {
         badge_printing: eventData.badge_printing || false,
         formFields: enrichedFields,
         exhibitors: processedExhibitors,
+        sessions: processedSessions,
         banner: getPublicImageUrl(safeEventId, "Banner", eventData.banner),
         logo: getPublicImageUrl(safeEventId, "Logo", eventData.logo),
         header: getPublicImageUrl(safeEventId, "Header", eventData.header),
