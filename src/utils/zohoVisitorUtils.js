@@ -65,9 +65,13 @@ const fetchVisitorDetails = async (visitorIdInput) => {
     } else if (data?.registration) {
       visitorData = data.registration;
       console.log("✅ Found visitor data in root.registration");
+    } else if (data.id) {
+      // Handle direct object response (like the example provided)
+      visitorData = data;
+      console.log("✅ Found visitor data as direct object");
     }
 
-    if (data?.code !== 3000) {
+    if (data?.code && data.code !== 3000) {
       console.error("❌ Zoho API returned error code:", data?.code);
       throw new Error(`Zoho API error: ${data?.message || 'Unknown error'} (Code: ${data?.code})`);
     }
@@ -120,12 +124,32 @@ const fetchVisitorDetails = async (visitorIdInput) => {
       return processedField;
     });
 
+    // Parse custom_fields_value if it's a JSON string
+    let customFields = {};
+    try {
+      if (typeof visitorData.custom_fields_value === 'string') {
+        customFields = JSON.parse(visitorData.custom_fields_value);
+      } else if (visitorData.custom_fields_value && typeof visitorData.custom_fields_value === 'object') {
+        customFields = visitorData.custom_fields_value;
+      } else if (visitorData.custom_fields) {
+        customFields = visitorData.custom_fields;
+      } else if (visitorData.Custom_Fields_Value) {
+        customFields = typeof visitorData.Custom_Fields_Value === 'string' 
+          ? JSON.parse(visitorData.Custom_Fields_Value) 
+          : visitorData.Custom_Fields_Value;
+      }
+    } catch (parseError) {
+      console.warn("⚠️ Failed to parse custom_fields_value:", parseError.message);
+      customFields = visitorData.custom_fields_value || {};
+    }
+
     const result = {
       visitor: {
         id: safeVisitorId,
+        salutation: visitorData.salutation || "",
         name: visitorData.name || visitorData.full_name || visitorData.Full_Name || "",
         email: visitorData.email || visitorData.Email || "",
-        phone: visitorData.phone || visitorData.mobile_number || visitorData.Phone_Number || "",
+        phone: visitorData.phone || visitorData.phone_number || visitorData.mobile_number || visitorData.Phone_Number || "",
         company: visitorData.company || visitorData.Company || "",
         job_title: visitorData.job_title || visitorData.Job_Title || "",
         registration_date: visitorData.registration_date || visitorData.Registration_Date || "",
@@ -140,7 +164,8 @@ const fetchVisitorDetails = async (visitorIdInput) => {
         encrypt_key: visitorData.encrypt_key || "",
         head_mark: visitorData.head_mark || false,
         check_in_history: visitorData.check_in_history || [],
-        custom_fields: visitorData.custom_fields || visitorData.Custom_Fields_Value || visitorData.custom_fields_value || {},
+        matching_list: visitorData.matching_list || [],
+        custom_fields: customFields,
         formFields: enrichedFields
       }
     };

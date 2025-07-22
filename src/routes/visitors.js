@@ -31,6 +31,10 @@ const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtil
  *                       type: string
  *                       description: ID của visitor
  *                       example: "4433256000012345678"
+ *                     salutation:
+ *                       type: string
+ *                       description: Danh xưng (Mr., Ms., Dr., etc.)
+ *                       example: "Mr."
  *                     name:
  *                       type: string
  *                       description: Tên đầy đủ của visitor
@@ -94,10 +98,36 @@ const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtil
  *                       description: Lịch sử check-in
  *                       items:
  *                         type: object
+ *                     matching_list:
+ *                       type: array
+ *                       description: Danh sách business matching
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           exhibitor_profile_id:
+ *                             type: integer
+ *                             description: ID của exhibitor
+ *                             example: 4433256000012938592
+ *                           time:
+ *                             type: string
+ *                             description: Thời gian hẹn
+ *                             example: "10:00:00"
+ *                           confirmed:
+ *                             type: boolean
+ *                             description: Trạng thái xác nhận
+ *                             example: false
+ *                           date:
+ *                             type: string
+ *                             description: Ngày hẹn
+ *                             example: "2025-08-01"
+ *                           message:
+ *                             type: string
+ *                             description: Ghi chú
+ *                             example: "test"
  *                     custom_fields:
  *                       type: object
- *                       description: Các trường custom đã điền
- *                       example: {"Job Function": "TECH", "Job Title": "Engineer"}
+ *                       description: Các trường custom đã điền (parsed object)
+ *                       example: {"vilog2025_confdatetime": "Thứ Bảy ngày 02/08", "vilog2025_jobtitle": "Chuyển phát nhanh", "Introduce Expo": "true"}
  *                     formFields:
  *                       type: array
  *                       description: Danh sách các field trong form (nếu có)
