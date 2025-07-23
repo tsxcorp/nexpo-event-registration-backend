@@ -143,6 +143,18 @@ const fetchVisitorDetails = async (visitorIdInput) => {
       customFields = visitorData.custom_fields_value || {};
     }
 
+    // 📝 Xử lý check_in_history với checkintime field
+    const processedCheckInHistory = (visitorData.check_in_history || []).map(checkIn => {
+      return {
+        event_name: checkIn.event_name || "",
+        qr_scan: checkIn.qr_scan || "",
+        valid_check: checkIn.valid_check || false,
+        event_id: checkIn.event_id ? String(checkIn.event_id) : "",
+        group_registration_id: checkIn.group_registration_id || "",
+        checkintime: checkIn.checkintime || ""
+      };
+    });
+
     const result = {
       visitor: {
         id: safeVisitorId,
@@ -163,7 +175,7 @@ const fetchVisitorDetails = async (visitorIdInput) => {
         redeem_id: visitorData.redeem_id || "",
         encrypt_key: visitorData.encrypt_key || "",
         head_mark: visitorData.head_mark || false,
-        check_in_history: visitorData.check_in_history || [],
+        check_in_history: processedCheckInHistory,
         matching_list: visitorData.matching_list || [],
         custom_fields: customFields,
         formFields: enrichedFields

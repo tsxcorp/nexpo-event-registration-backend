@@ -154,6 +154,37 @@ const fetchEventDetails = async (eventIdInput) => {
       };
     });
 
+    // 🗓️ Group sessions by date for minimalist timeline
+    const groupSessionsByDate = (sessions) => {
+      const grouped = {};
+      sessions.forEach(session => {
+        const date = session.date;
+        if (!grouped[date]) {
+          grouped[date] = [];
+        }
+        grouped[date].push(session);
+      });
+
+      return Object.keys(grouped).sort().map(date => {
+        const sessionsForDate = grouped[date];
+        
+        // Format date for better display
+        const dateObj = new Date(date);
+        const dayNames = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
+        const monthNames = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12'];
+        
+        return {
+          date: date,
+          display_date: `${String(dateObj.getDate()).padStart(2, '0')}-${monthNames[dateObj.getMonth()]}`,
+          day_name: dayNames[dateObj.getDay()],
+          session_count: sessionsForDate.length,
+          sessions: sessionsForDate
+        };
+      });
+    };
+
+    const sessionsByDate = groupSessionsByDate(processedSessions);
+
     return {
       event: {
         id: safeEventId,
@@ -169,11 +200,13 @@ const fetchEventDetails = async (eventIdInput) => {
         formFields: enrichedFields,
         exhibitors: processedExhibitors,
         sessions: processedSessions,
+        sessions_by_date: sessionsByDate,
         banner: getPublicImageUrl(safeEventId, "Banner", eventData.banner),
         logo: getPublicImageUrl(safeEventId, "Logo", eventData.logo),
         header: getPublicImageUrl(safeEventId, "Header", eventData.header),
         footer: getPublicImageUrl(safeEventId, "Footer", eventData.footer),
-        favicon: getPublicImageUrl(safeEventId, "Favicon", eventData.favicon)
+        favicon: getPublicImageUrl(safeEventId, "Favicon", eventData.favicon),
+        floor_plan_pdf: eventData.floor_plan_pdf || ""
       },
       gallery: galleryUrls
     };

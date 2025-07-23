@@ -98,6 +98,31 @@ const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtil
  *                       description: Lịch sử check-in
  *                       items:
  *                         type: object
+ *                         properties:
+ *                           event_name:
+ *                             type: string
+ *                             description: Tên sự kiện đã check-in
+ *                             example: "VIET NAM INTERNATIONAL LOGISTICS EXHIBITION 2025"
+ *                           qr_scan:
+ *                             type: string
+ *                             description: QR code đã scan
+ *                             example: "VILOG2510000930"
+ *                           valid_check:
+ *                             type: boolean
+ *                             description: Check-in có hợp lệ không
+ *                             example: true
+ *                           event_id:
+ *                             type: string
+ *                             description: ID sự kiện đã check-in
+ *                             example: "4433256000012557772"
+ *                           group_registration_id:
+ *                             type: string
+ *                             description: ID đăng ký nhóm (nếu có)
+ *                             example: ""
+ *                           checkintime:
+ *                             type: string
+ *                             description: Thời gian check-in
+ *                             example: "2025-07-22 20:28:36.0"
  *                     matching_list:
  *                       type: array
  *                       description: Danh sách business matching
