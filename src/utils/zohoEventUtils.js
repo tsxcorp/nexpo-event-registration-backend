@@ -7,8 +7,18 @@ const {
   ZOHO_PUBLIC_KEY,
   ZOHO_PRIVATELINK_ALL_EVENTS,
   ZOHO_PRIVATELINK_GALLERY,
-  ZOHO_PRIVATELINK_EXHIBITOR_PROFILES
+  ZOHO_PRIVATELINK_EXHIBITOR_PROFILES,
+  ZOHO_PRIVATELINK_SESSIONS
 } = process.env;
+
+// 🔍 Debug: Check environment variables
+console.log('🔍 Zoho Environment Variables:');
+console.log('  ZOHO_ORG_NAME:', ZOHO_ORG_NAME ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_APP_NAME:', ZOHO_APP_NAME ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_PRIVATELINK_ALL_EVENTS:', ZOHO_PRIVATELINK_ALL_EVENTS ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_PRIVATELINK_GALLERY:', ZOHO_PRIVATELINK_GALLERY ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_PRIVATELINK_EXHIBITOR_PROFILES:', ZOHO_PRIVATELINK_EXHIBITOR_PROFILES ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_PRIVATELINK_SESSIONS:', ZOHO_PRIVATELINK_SESSIONS ? '✅ Set' : '❌ Missing');
 
 // 📸 Build public image URL
 const getPublicImageUrl = (recordId, fieldName, filePath) => {
@@ -28,6 +38,16 @@ const getGalleryImageUrls = (galleryId, galleryObj) => {
 const getExhibitorImageUrl = (recordId, fieldName, filePath) => {
   if (!filePath) return "";
   return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Exhibitor_Profiles/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_EXHIBITOR_PROFILES}?filepath=/${filePath}`;
+};
+
+// 📅 Build public session banner image URLs
+const getSessionBannerUrl = (recordId, fieldName, filePath) => {
+  if (!filePath) return "";
+  if (!ZOHO_PRIVATELINK_SESSIONS) {
+    console.warn(`⚠️ ZOHO_PRIVATELINK_SESSIONS is not defined. Session banner URL cannot be generated for session ${recordId}`);
+    return "";
+  }
+  return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Sessions/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_SESSIONS}?filepath=/${filePath}`;
 };
 
 // 🚀 Fetch full event data from Zoho Creator Custom API
@@ -150,7 +170,8 @@ const fetchEventDetails = async (eventIdInput) => {
         speaker_id: session.speaker_id ? String(session.speaker_id) : "",
         area_name: session.area_name || "",
         area_id: session.area_id ? String(session.area_id) : "",
-        session_accessibility: session.session_accessibility || ""
+        session_accessibility: session.session_accessibility || "",
+        session_banner: session.session_banner ? getSessionBannerUrl(String(session.id), "Banner", session.session_banner) : ""
       };
     });
 

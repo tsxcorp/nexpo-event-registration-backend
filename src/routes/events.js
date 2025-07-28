@@ -214,6 +214,10 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                             type: string
  *                             description: Phạm vi truy cập session
  *                             example: "All ticket classes"
+ *                           session_banner:
+ *                             type: string
+ *                             description: URL banner image của session (đã process thành public URL)
+ *                             example: "https://creatorexport.zoho.com/file/tsxcorp/nexpo/All_Sessions/4433256000012707031/Banner/image-download/wwa8TKgnHpS4v9dESgnUFSQFKBrRuS7Ox9ntWPnuSUrmfw2OxkVwVJTG0T4ugCbtRmW6Ytg31MydA0WXggAF68jNzsRtO1f6ERjD?filepath=/1753675822307324_523908681_10161364504588038_9121145198446849570_n.jpg"
  *                     sessions_by_date:
  *                       type: array
  *                       description: Sessions được group theo ngày cho timeline minimalist
