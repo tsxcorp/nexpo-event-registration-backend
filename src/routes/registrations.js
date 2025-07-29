@@ -14,7 +14,7 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *         required: true
  *         schema:
  *           type: string
- *         description: ID của sự kiện trong Zoho
+ *         description: ID của sự kiện trong Zoho. Có thể truyền qua query param (?Event_Info=123) hoặc trong request body
  *     requestBody:
  *       required: true
  *       content:
@@ -22,6 +22,9 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *           schema:
  *             type: object
  *             properties:
+ *               Event_Info:
+ *                 type: string
+ *                 description: ID của sự kiện (optional if provided as query param)
  *               title:
  *                 type: string
  *                 description: Salutation (Mr., Ms., etc.)
@@ -36,7 +39,7 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                 description: Phone number
  *               custom_fields_value:
  *                 type: object
- *                 description: Additional custom fields from the event form
+ *                 description: Additional custom fields from the event form (supports both custom_fields_value and Custom_Fields_Value)
  *             required:
  *               - full_name
  *               - email
@@ -49,7 +52,8 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  */
 router.post('/', async (req, res) => {
   try {
-    const eventId = req.body.Event_Info || req.body.event_info;
+    // Get eventId from query params as per Swagger documentation
+    const eventId = req.query.Event_Info || req.query.event_info || req.body.Event_Info || req.body.event_info;
     let fieldDefinitions = [];
     
     // Fetch field definitions from event data for proper field_id processing
@@ -65,18 +69,32 @@ router.post('/', async (req, res) => {
       }
     }
     
-    // Add field definitions to the request data for processing
+    // Add field definitions and eventId to the request data for processing
     const dataWithFieldDefs = {
       ...req.body,
+      Event_Info: eventId, // Ensure Event_Info is included regardless of source (query or body)
       fieldDefinitions: fieldDefinitions
     };
     
+    const customFieldsData = req.body.Custom_Fields_Value || req.body.custom_fields_value;
     console.log('📥 Registration request received:', {
       eventId,
-      hasCustomFields: !!req.body.Custom_Fields_Value,
-      customFieldsCount: req.body.Custom_Fields_Value ? Object.keys(req.body.Custom_Fields_Value).length : 0,
+      eventIdSource: req.query.Event_Info ? 'query.Event_Info' : 
+                     req.query.event_info ? 'query.event_info' : 
+                     req.body.Event_Info ? 'body.Event_Info' : 
+                     req.body.event_info ? 'body.event_info' : 'not_found',
+      hasCustomFields: !!customFieldsData,
+      customFieldsCount: customFieldsData ? Object.keys(customFieldsData).length : 0,
       fieldDefinitionsCount: fieldDefinitions.length
     });
+
+    if (!eventId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing Event_Info',
+        message: 'Event_Info must be provided as query parameter or in request body'
+      });
+    }
     
     const result = await submitRegistration(dataWithFieldDefs);
     

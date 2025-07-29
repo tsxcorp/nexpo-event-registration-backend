@@ -42,7 +42,130 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
   return processedFields;
 };
 
+// 🚀 Submit via Zoho Custom Function (matches your submitRegistration function)
+const submitViaCustomFunction = async (data) => {
+  const customFunctionURL = `${process.env.ZOHO_BASE_URL}/creator/custom/${process.env.ZOHO_ORG_NAME}/submitRegistration`;
+  
+  // Try multiple methods if GET fails
+  const methods = ['GET', 'POST'];
+  
+  for (const method of methods) {
+    try {
+      return await tryCustomFunctionWithMethod(customFunctionURL, data, method);
+    } catch (err) {
+      console.warn(`❌ ${method} method failed:`, err.message);
+      if (method === methods[methods.length - 1]) {
+        // Last method failed, throw the error
+        throw err;
+      }
+      console.log(`🔄 Trying next method...`);
+    }
+  }
+};
+
+const tryCustomFunctionWithMethod = async (customFunctionURL, data, method) => {
+  
+  // Format data for Custom Function (lowercase field names)
+  const customFunctionPayload = {
+    title: data.title || data.Salutation || "",
+    full_name: data.full_name || data.Full_Name || "",
+    email: data.email || data.Email || "",
+    mobile_number: data.mobile_number || data.Phone_Number || "",
+    event_info: data.Event_Info || data.event_info || "",
+    custom_fields_value: JSON.stringify(data.Custom_Fields_Value || data.custom_fields_value || {}),
+    group_members: JSON.stringify(data.group_members || [])
+  };
+
+  console.log(`📤 Trying ${method} method for Zoho Custom Function:`, JSON.stringify(customFunctionPayload, null, 2));
+  
+  const requestData = {
+    data_map_str: JSON.stringify(customFunctionPayload),
+    publickey: process.env.ZOHO_PUBLIC_KEY
+  };
+  
+  console.log('🔗 Custom Function URL:', customFunctionURL);
+  console.log(`📋 ${method} Request Data:`, requestData);
+  console.log('🔑 Public Key:', process.env.ZOHO_PUBLIC_KEY ? '✅ Set' : '❌ Missing');
+
+  try {
+    let response;
+    
+    if (method === 'GET') {
+      response = await axios.get(customFunctionURL, {
+        headers: { 
+          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; NexpoBot/1.0)'
+        },
+        params: requestData,
+        responseType: 'text',
+        timeout: 30000
+      });
+    } else if (method === 'POST') {
+      response = await axios.post(customFunctionURL, requestData, {
+        headers: { 
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          'User-Agent': 'Mozilla/5.0 (compatible; NexpoBot/1.0)'
+        },
+        params: {
+          publickey: process.env.ZOHO_PUBLIC_KEY
+        },
+        responseType: 'text',
+        timeout: 30000
+      });
+    }
+
+    const result = JSON.parse(response.data);
+    console.log('✅ Custom Function Response:', result);
+
+    return {
+      success: true,
+      zoho_record_id: result.main_record_id || "custom_function_success",
+      group_id: result.group_id || `GRP-${Date.now()}`,
+      details: result
+    };
+  } catch (err) {
+    console.error("❌ Custom Function Error Details:");
+    console.error("  Status:", err.response?.status);
+    console.error("  Status Text:", err.response?.statusText);
+    console.error("  Headers:", err.response?.headers);
+    console.error("  Data:", err.response?.data);
+    console.error("  Message:", err.message);
+    
+    // Try to provide more specific error information
+    if (err.response?.status === 400) {
+      console.error("🔍 400 Error Analysis:");
+      console.error("  - Check if Custom Function name 'submitRegistration' exists");
+      console.error("  - Check if publickey is correct");
+      console.error("  - Check if data_map_str format is valid");
+      console.error("  - Verify Custom Function expects GET method");
+    }
+    
+    throw new Error(`Custom Function failed: ${err.response?.status} ${err.response?.statusText} - ${err.response?.data || err.message}`);
+  }
+};
+
 const submitRegistration = async (data) => {
+  // Option 1: Use Custom Function (matches your Zoho function)
+  const USE_CUSTOM_FUNCTION = process.env.USE_ZOHO_CUSTOM_FUNCTION === 'true';
+  const FALLBACK_TO_REST_API = process.env.FALLBACK_TO_REST_API !== 'false'; // Default true
+  
+  if (USE_CUSTOM_FUNCTION) {
+    try {
+      return await submitViaCustomFunction(data);
+    } catch (err) {
+      console.error("❌ Custom Function completely failed:", err.message);
+      
+      if (FALLBACK_TO_REST_API) {
+        console.warn("🔄 Falling back to REST API...");
+        // Continue to REST API below
+      } else {
+        throw err; // Re-throw if fallback is disabled
+      }
+    }
+  }
+  
+  // Option 2: Use REST API (current implementation)
   const formPublicURL =
     "https://www.zohoapis.com/creator/v2.1/publish/tsxcorp/nxp/form/Master_Registration?privatelink=A982datdqWF3EW9j6QbEdwG0vWXV3ykHz3D4tSGhvPaX1JwfNTUyyCuhGjhpdDJUEgOKXbpuKktqZ7Ssz8bjZj5Awvfd47DnB59C";
 
@@ -61,18 +184,21 @@ const submitRegistration = async (data) => {
   const mainRecord = {
     Event_Info: eventInfo,
     Group_ID: groupId,
-    Salutation: mainRecordData.Salutation,
-    Full_Name: mainRecordData.Full_Name,
-    Email: mainRecordData.Email,
-    Phone_Number: mainRecordData.Phone_Number,
+    Salutation: mainRecordData.Salutation || mainRecordData.title,
+    Full_Name: mainRecordData.Full_Name || mainRecordData.full_name,
+    Email: mainRecordData.Email || mainRecordData.email,
+    Phone_Number: mainRecordData.Phone_Number || mainRecordData.mobile_number,
   };
 
   // Process the Custom_Fields_Value object from the main registrant
-  if (mainRecordData.Custom_Fields_Value && Object.keys(mainRecordData.Custom_Fields_Value).length > 0) {
-    const processedCustomFields = processCustomFields(mainRecordData.Custom_Fields_Value, fieldDefinitions);
+  const customFieldsData = mainRecordData.Custom_Fields_Value || mainRecordData.custom_fields_value;
+  if (customFieldsData && Object.keys(customFieldsData).length > 0) {
+    const processedCustomFields = processCustomFields(customFieldsData, fieldDefinitions);
     mainRecord.Custom_Fields_Value = processedCustomFields;
   }
   records.push(mainRecord);
+  
+  console.log('📋 Main record built:', JSON.stringify(mainRecord, null, 2));
 
   // 2. Process group member records
   const coreFields = ['Salutation', 'Full_Name', 'Email', 'Phone_Number'];
@@ -138,19 +264,11 @@ const submitRegistration = async (data) => {
     }
   }
 
-  const result = {
-    zoho_record_id: mainZohoRecordId,
-    group_id: groupId,
-    group_members: responses.slice(1).map((res, i) => ({ // Exclude main registrant from member list
-      ID: res.data.ID,
-      Full_Name: records[i + 1].Full_Name,
-      Email: records[i + 1].Email
-    }))
-  };
-
-  console.log("✅ Returning payload to frontend:", JSON.stringify(result, null, 2));
-
-  return result;
+  return { success: true, responses, zoho_record_id: mainZohoRecordId, group_members: responses.slice(1).map((res, i) => ({ // Exclude main registrant from member list
+    id: res.data.ID,
+    index: i + 2,
+    status: "submitted"
+  })) };
 };
 
-module.exports = { submitRegistration };
+module.exports = { submitRegistration, processCustomFields };
