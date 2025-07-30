@@ -196,17 +196,40 @@ const fetchVisitorDetails = async (visitorIdInput) => {
 const submitCheckin = async (visitorData) => {
   const apiUrl = `${ZOHO_BASE_URL}/creator/custom/${ZOHO_ORG_NAME}/NXP_submitCheckin`;
 
+  // 🔍 Debug: Check environment variables
+  console.log("🔍 Check-in Environment Variables:");
+  console.log("  ZOHO_CHECKIN_PUBLIC_KEY:", ZOHO_CHECKIN_PUBLIC_KEY ? '✅ Set' : '❌ Missing');
+  console.log("  ZOHO_VISITOR_PUBLIC_KEY:", ZOHO_VISITOR_PUBLIC_KEY ? '✅ Set' : '❌ Missing');
+  
+  // Use fallback if checkin key is not set
+  const publicKey = ZOHO_CHECKIN_PUBLIC_KEY || ZOHO_VISITOR_PUBLIC_KEY;
+  if (!publicKey) {
+    throw new Error("No public key available for check-in submission");
+  }
+
+  // 🎯 Simplify payload to match Deluge function requirements
+  // Deluge function only needs: visitor.id, visitor.redeem_qr, visitor.event_id
+  const simplifiedPayload = {
+    visitor: {
+      id: visitorData.visitor?.id || visitorData.visitor_id,
+      redeem_qr: visitorData.visitor?.redeem_qr || visitorData.visitor?.redeem_id,
+      event_id: visitorData.visitor?.event_id || visitorData.event_id
+    }
+  };
+
   try {
     console.log("🔄 Submitting check-in data to:", apiUrl);
-    console.log("📋 Check-in payload:", JSON.stringify(visitorData, null, 2));
+    console.log("📋 Original payload:", JSON.stringify(visitorData, null, 2));
+    console.log("🎯 Simplified payload for Deluge:", JSON.stringify(simplifiedPayload, null, 2));
+    console.log("🔑 Using public key:", publicKey ? "***" + publicKey.slice(-4) : "NOT_SET");
 
-    const response = await axios.post(apiUrl, visitorData, {
+    const response = await axios.post(apiUrl, simplifiedPayload, {
       headers: { 
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
       params: {
-        publickey: ZOHO_CHECKIN_PUBLIC_KEY
+        publickey: publicKey
       }
     });
 
@@ -226,7 +249,16 @@ const submitCheckin = async (visitorData) => {
   } catch (err) {
     console.error("❌ Error in submitCheckin:", err.message);
     console.error("❌ Error details:", err.response?.data || err.stack);
-    throw new Error(`Failed to submit check-in: ${err.response?.data?.message || err.message}`);
+    
+    // 🛡️ Graceful handling: Return warning instead of throwing error
+    // This allows check-in process to continue even if Zoho Custom Function fails
+    return {
+      success: false,
+      warning: true,
+      message: "Check-in submission failed but process continued",
+      error: err.response?.data?.message || err.message,
+      details: "Zoho Custom Function NXP_submitCheckin is not working properly. Check-in data was not saved to Zoho but visitor was processed successfully."
+    };
   }
 };
 

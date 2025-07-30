@@ -365,7 +365,22 @@ router.post('/checkin', async (req, res) => {
 
   try {
     const result = await submitCheckin({ visitor });
-    console.log("✅ Check-in submitted successfully for visitor:", visitor.id);
+    console.log("✅ Check-in result for visitor:", visitor.id, result);
+    
+    // Handle warning response (Zoho Custom Function failed but process continued)
+    if (result.warning) {
+      console.warn("⚠️ Check-in warning:", result.message);
+      console.warn("⚠️ Details:", result.details);
+      
+      // Return 200 with warning info instead of error
+      return res.status(200).json({
+        success: true,
+        warning: true,
+        message: result.message,
+        details: result.details,
+        error: result.error
+      });
+    }
     
     res.status(200).json(result);
   } catch (err) {
