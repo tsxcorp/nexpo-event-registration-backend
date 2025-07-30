@@ -55,6 +55,8 @@ const fetchEventDetails = async (eventIdInput) => {
   const apiUrl = `${ZOHO_BASE_URL}/creator/custom/${ZOHO_ORG_NAME}/NXP_getEventInfo`;
 
   try {
+    console.log(`🔍 Fetching event data for: ${eventIdInput}`);
+    
     const response = await axios.get(apiUrl, {
       headers: { Accept: 'application/json' },
       params: {
@@ -71,13 +73,70 @@ const fetchEventDetails = async (eventIdInput) => {
       return value;
     });
 
-    const eventData = data.result?.event;
+    // Check if this is a list all events request (when eventIdInput is "NEXPO")
+    if (eventIdInput === "NEXPO") {
+      // Check multiple possible response structures
+      let eventsArray = null;
+      
+      if (data.events && Array.isArray(data.events)) {
+        eventsArray = data.events;
+        console.log(`📋 Found ${eventsArray.length} events in data.events`);
+      } else if (Array.isArray(data)) {
+        eventsArray = data;
+        console.log(`📋 Found ${eventsArray.length} events in direct array`);
+      } else if (data.result && data.result.events && Array.isArray(data.result.events)) {
+        eventsArray = data.result.events;
+        console.log(`📋 Found ${eventsArray.length} events in data.result.events`);
+      }
+      
+      if (eventsArray) {
+        // Process list of events
+        const processedEvents = eventsArray.map(event => {
+          const safeEventId = String(event.id);
+          
+          return {
+            id: safeEventId,
+            name: event.name || "",
+            description: event.description || "",
+            start_date: event.start_date || "",
+            end_date: event.end_date || "",
+            logo: event.logo || "",
+            banner: event.banner || "",
+            email: event.email || "",
+            location: event.location || "",
+            badge_size: event.badge_size || "",
+            badge_printing: event.badge_printing || false
+          };
+        });
 
-    if (data?.code !== 3000 || !eventData) {
-      throw new Error("Invalid or incomplete response from Zoho Custom API.");
+        return {
+          events: processedEvents,
+          total: processedEvents.length,
+          mode: "list"
+        };
+      } else {
+        console.error('❌ No events array found in NEXPO response:', {
+          hasEvents: !!data.events,
+          hasResult: !!data.result,
+          hasResultEvents: !!data.result?.events,
+          isArray: Array.isArray(data),
+          responseKeys: Object.keys(data)
+        });
+        throw new Error("Invalid response for NEXPO mode - no events array found");
+      }
     }
 
-    const safeEventId = String(eventIdInput); // 🟢 Dùng ID từ query param
+    // Original single event processing
+    const eventData = data.result?.event;
+
+    if (!eventData) {
+      console.error('❌ No event data found in response:', {
+        hasResult: !!data.result,
+        hasEvent: !!data.result?.event,
+        responseKeys: Object.keys(data)
+      });
+      throw new Error("Invalid or incomplete response from Zoho Custom API - no event data found.");
+    }
 
     // 🔄 Xử lý formFields để bao gồm tất cả properties có sẵn
     const enrichedFields = (eventData.formFields || []).map((field, index) => {
@@ -208,7 +267,7 @@ const fetchEventDetails = async (eventIdInput) => {
 
     return {
       event: {
-        id: safeEventId,
+        id: String(eventData.id), // Ensure it's a string
         name: eventData.name,
         description: eventData.description,
         email: eventData.email,
@@ -222,14 +281,15 @@ const fetchEventDetails = async (eventIdInput) => {
         exhibitors: processedExhibitors,
         sessions: processedSessions,
         sessions_by_date: sessionsByDate,
-        banner: getPublicImageUrl(safeEventId, "Banner", eventData.banner),
-        logo: getPublicImageUrl(safeEventId, "Logo", eventData.logo),
-        header: getPublicImageUrl(safeEventId, "Header", eventData.header),
-        footer: getPublicImageUrl(safeEventId, "Footer", eventData.footer),
-        favicon: getPublicImageUrl(safeEventId, "Favicon", eventData.favicon),
+        banner: getPublicImageUrl(String(eventData.id), "Banner", eventData.banner),
+        logo: getPublicImageUrl(String(eventData.id), "Logo", eventData.logo),
+        header: getPublicImageUrl(String(eventData.id), "Header", eventData.header),
+        footer: getPublicImageUrl(String(eventData.id), "Footer", eventData.footer),
+        favicon: getPublicImageUrl(String(eventData.id), "Favicon", eventData.favicon),
         floor_plan_pdf: eventData.floor_plan_pdf || ""
       },
-      gallery: galleryUrls
+      gallery: galleryUrls,
+      mode: "single"
     };
   } catch (err) {
     console.error("❌ Error in fetchEventDetails:", err.message);
