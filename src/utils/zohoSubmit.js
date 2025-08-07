@@ -84,6 +84,10 @@ const submitViaCustomFunction = async (data) => {
 
 const tryCustomFunctionWithMethod = async (customFunctionURL, data, method) => {
   
+  // Detect if this is a group registration for custom function
+  const groupMembers = Array.isArray(data.group_members) ? data.group_members : [];
+  const isGroupRegistration = groupMembers && groupMembers.length > 0;
+  
   // Format data for Custom Function (lowercase field names)
   const customFunctionPayload = {
     title: data.title || data.Salutation || "",
@@ -91,6 +95,7 @@ const tryCustomFunctionWithMethod = async (customFunctionURL, data, method) => {
     email: data.email || data.Email || "",
     mobile_number: data.mobile_number || data.Phone_Number || "",
     event_info: data.Event_Info || data.event_info || "",
+    group_registration: isGroupRegistration,
     custom_fields_value: JSON.stringify(data.Custom_Fields_Value || data.custom_fields_value || {}),
     group_members: JSON.stringify(data.group_members || [])
   };
@@ -271,6 +276,7 @@ const submitRegistration = async (data) => {
     const memberRecord = {
       Event_Info: eventInfo,
       Group_ID: groupId,
+      Group_Registration: isGroupRegistration,
       Salutation: member.Salutation || member.title,
       Full_Name: member.Full_Name || member.full_name,
       Email: member.Email || member.email,
