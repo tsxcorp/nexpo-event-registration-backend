@@ -39,7 +39,55 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *                 description: Phone number
  *               custom_fields_value:
  *                 type: object
- *                 description: Additional custom fields from the event form (supports both custom_fields_value and Custom_Fields_Value)
+ *                 description: "Custom fields with metadata support. Supports 3 formats: 1) Metadata format: field_id: {field_label, field_condition, value}, 2) Simple format: field_id: value, 3) Legacy format: field_label: value"
+ *                 additionalProperties:
+ *                   oneOf:
+ *                     - type: object
+ *                       description: "Metadata format with field information"
+ *                       properties:
+ *                         field_label:
+ *                           type: string
+ *                           description: "Display label for the field"
+ *                         field_condition:
+ *                           type: string
+ *                           description: "Field condition (required, optional, etc.)"
+ *                         value:
+ *                           type: string
+ *                           description: "Actual field value"
+ *                       required:
+ *                         - value
+ *                     - type: string
+ *                       description: "Simple value format (legacy)"
+ *                 example:
+ *                   vilog2025_jobtitle:
+ *                     field_label: "Job Title"
+ *                     field_condition: "required"
+ *                     value: "CEO"
+ *                   vilog2025_company:
+ *                     field_label: "Company Name"
+ *                     field_condition: "optional"
+ *                     value: "ABC Corp"
+ *               group_members:
+ *                 type: array
+ *                 description: Array of group members for group registration
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     title:
+ *                       type: string
+ *                       description: Salutation (Mr., Ms., etc.)
+ *                     full_name:
+ *                       type: string
+ *                       description: Full name of group member
+ *                     email:
+ *                       type: string
+ *                       description: Email address of group member
+ *                     mobile_number:
+ *                       type: string
+ *                       description: Phone number of group member
+ *                   required:
+ *                     - full_name
+ *                     - email
  *             required:
  *               - full_name
  *               - email

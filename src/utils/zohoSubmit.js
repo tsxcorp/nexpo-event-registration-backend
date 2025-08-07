@@ -15,19 +15,38 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
   const processedFields = {};
   
   Object.entries(customFieldsValue).forEach(([key, value]) => {
-    // Check if key is already a field_id format
+    // NEW: Check if value is metadata object format
+    if (value && typeof value === 'object' && 'value' in value) {
+      // New metadata format: { field_label: "...", field_condition: "...", value: "..." }
+      const fieldValue = value.value;
+      const fieldLabel = value.field_label;
+      const fieldCondition = value.field_condition;
+      
+      console.log(`📊 Metadata format detected for "${key}":`, {
+        label: fieldLabel,
+        condition: fieldCondition,
+        value: fieldValue
+      });
+      
+      // Use the key as field_id directly (frontend should send field_id as key)
+      processedFields[key] = fieldValue;
+      console.log(`✅ Metadata processed: ${key} = ${fieldValue}`);
+      return;
+    }
+    
+    // LEGACY: Check if key is already a field_id format (simple value)
     const fieldByFieldId = fieldDefinitions.find(f => f.field_id === key);
     if (fieldByFieldId) {
-      // New format: key is field_id
+      // Legacy format: key is field_id, value is simple value
       processedFields[key] = value;
       console.log(`✅ Field ID format detected: ${key} = ${value}`);
       return;
     }
     
-    // Check if key is a field label (backward compatibility)
+    // LEGACY: Check if key is a field label (backward compatibility)
     const fieldByLabel = fieldDefinitions.find(f => f.label === key);
     if (fieldByLabel && fieldByLabel.field_id) {
-      // Old format: key is label, convert to field_id
+      // Legacy format: key is label, convert to field_id
       processedFields[fieldByLabel.field_id] = value;
       console.log(`🔄 Converted label to field_id: "${key}" → "${fieldByLabel.field_id}" = ${value}`);
       return;
@@ -174,6 +193,10 @@ const submitRegistration = async (data) => {
   const groupMembers = Array.isArray(data.group_members) ? data.group_members : [];
   const eventInfo = data.Event_Info ?? data.event_info ?? null;
   
+  // Detect if this is a group registration
+  const isGroupRegistration = groupMembers && groupMembers.length > 0;
+  console.log(`👥 Group registration detected: ${isGroupRegistration} (${groupMembers.length} members)`);;
+  
   // Get field definitions for processing (if available)
   // Note: In a real implementation, you might want to fetch this from your event data
   const fieldDefinitions = data.fieldDefinitions || [];
@@ -184,6 +207,7 @@ const submitRegistration = async (data) => {
   const mainRecord = {
     Event_Info: eventInfo,
     Group_ID: groupId,
+    Group_Registration: isGroupRegistration,
     Salutation: mainRecordData.Salutation || mainRecordData.title,
     Full_Name: mainRecordData.Full_Name || mainRecordData.full_name,
     Email: mainRecordData.Email || mainRecordData.email,
@@ -196,23 +220,69 @@ const submitRegistration = async (data) => {
     const processedCustomFields = processCustomFields(customFieldsData, fieldDefinitions);
     mainRecord.Custom_Fields_Value = processedCustomFields;
   }
+
+  // Add Group_Members JSON field to main record
+  if (groupMembers && groupMembers.length > 0) {
+    const processedGroupMembers = groupMembers.map(member => {
+      const memberData = {};
+      
+      // Core fields mapping for members
+      if (member.Salutation || member.title) memberData.salutation = member.Salutation || member.title;
+      if (member.Full_Name || member.full_name) memberData.full_name = member.Full_Name || member.full_name;
+      if (member.Email || member.email) memberData.email = member.Email || member.email;
+      if (member.Phone_Number || member.mobile_number) memberData.phone_number = member.Phone_Number || member.mobile_number;
+      
+      // Add custom fields for members (support metadata format)
+      const memberCustomFields = {};
+      const coreFields = ['Salutation', 'Full_Name', 'Email', 'Phone_Number', 'title', 'full_name', 'email', 'mobile_number'];
+      
+      for (const [key, value] of Object.entries(member)) {
+        if (!coreFields.includes(key) && value !== null && value !== undefined && value !== '') {
+          // Check if value is metadata object format
+          if (value && typeof value === 'object' && 'value' in value) {
+            // Metadata format: extract the actual value
+            memberCustomFields[key] = value.value;
+            console.log(`📊 Member metadata field: ${key} = ${value.value} (label: ${value.field_label})`);
+          } else {
+            // Simple format: use value directly
+            memberCustomFields[key] = value;
+          }
+        }
+      }
+      
+      if (Object.keys(memberCustomFields).length > 0) {
+        memberData.custom_fields = memberCustomFields;
+      }
+      
+      return memberData;
+    });
+    
+    mainRecord.Group_Members = JSON.stringify(processedGroupMembers);
+    console.log('👥 Group_Members JSON added to main record:', mainRecord.Group_Members);
+  }
+
   records.push(mainRecord);
   
   console.log('📋 Main record built:', JSON.stringify(mainRecord, null, 2));
 
   // 2. Process group member records
-  const coreFields = ['Salutation', 'Full_Name', 'Email', 'Phone_Number'];
+  const coreFields = ['Salutation', 'Full_Name', 'Email', 'Phone_Number', 'title', 'full_name', 'email', 'mobile_number'];
   for (const member of groupMembers) {
     const memberRecord = {
       Event_Info: eventInfo,
       Group_ID: groupId,
+      Salutation: member.Salutation || member.title,
+      Full_Name: member.Full_Name || member.full_name,
+      Email: member.Email || member.email,
+      Phone_Number: member.Phone_Number || member.mobile_number,
     };
     const customFields = {};
 
     // Separate core fields from custom fields for the member
     for (const [key, value] of Object.entries(member)) {
       if (coreFields.includes(key)) {
-        memberRecord[key] = value;
+        // Skip core fields as they're already processed above
+        continue;
       } else {
         customFields[key] = value;
       }
@@ -264,11 +334,17 @@ const submitRegistration = async (data) => {
     }
   }
 
-  return { success: true, responses, zoho_record_id: mainZohoRecordId, group_members: responses.slice(1).map((res, i) => ({ // Exclude main registrant from member list
-    id: res.data.ID,
-    index: i + 2,
-    status: "submitted"
-  })) };
+  return { 
+    success: true, 
+    responses, 
+    zoho_record_id: mainZohoRecordId, 
+    group_id: groupId,
+    group_members: responses.slice(1).map((res, i) => ({ // Exclude main registrant from member list
+      id: res.data.ID,
+      index: i + 2,
+      status: "submitted"
+    })) 
+  };
 };
 
 module.exports = { submitRegistration, processCustomFields };

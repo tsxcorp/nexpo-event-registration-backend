@@ -198,7 +198,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       let lastError = '';
 
       while (attempt <= RETRY_LIMIT) {
-                try {
+        try {
           console.log(`🔄 Attempt ${attempt + 1} for row ${i + 1}...`);
           
           // Update session tracking
