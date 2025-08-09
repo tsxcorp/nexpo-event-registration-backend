@@ -52,7 +52,7 @@ router.get('/registrations/:eventId', async (req, res) => {
     const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
       max_records: 1000,
       fetchAll: true,
-      useCache: true // Enable caching for performance
+      useCache: false // Disable cache to get fresh data
     });
 
     // Client-side filtering by Event_Info.ID
@@ -148,7 +148,7 @@ router.get('/events/list', async (req, res) => {
     const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
       max_records: 1000,
       fetchAll: true,
-      useCache: true // Enable caching for performance
+      useCache: false // Disable cache to get fresh data
     });
 
     // Group by event
