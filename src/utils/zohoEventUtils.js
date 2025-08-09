@@ -1,54 +1,24 @@
 const axios = require('axios');
+const { 
+  getEventImageUrl,
+  getGalleryImageUrl,
+  getExhibitorImageUrl,
+  getSessionImageUrl
+} = require('./zohoImageUtils');
 
 const {
   ZOHO_ORG_NAME,
-  ZOHO_APP_NAME,
   ZOHO_BASE_URL,
-  ZOHO_PUBLIC_KEY,
-  ZOHO_PRIVATELINK_ALL_EVENTS,
-  ZOHO_PRIVATELINK_GALLERY,
-  ZOHO_PRIVATELINK_EXHIBITOR_PROFILES,
-  ZOHO_PRIVATELINK_SESSIONS
+  ZOHO_PUBLIC_KEY
 } = process.env;
 
 // 🔍 Debug: Check environment variables
-console.log('🔍 Zoho Environment Variables:');
+console.log('🔍 Zoho Event Utils Environment Variables:');
 console.log('  ZOHO_ORG_NAME:', ZOHO_ORG_NAME ? '✅ Set' : '❌ Missing');
-console.log('  ZOHO_APP_NAME:', ZOHO_APP_NAME ? '✅ Set' : '❌ Missing');
-console.log('  ZOHO_PRIVATELINK_ALL_EVENTS:', ZOHO_PRIVATELINK_ALL_EVENTS ? '✅ Set' : '❌ Missing');
-console.log('  ZOHO_PRIVATELINK_GALLERY:', ZOHO_PRIVATELINK_GALLERY ? '✅ Set' : '❌ Missing');
-console.log('  ZOHO_PRIVATELINK_EXHIBITOR_PROFILES:', ZOHO_PRIVATELINK_EXHIBITOR_PROFILES ? '✅ Set' : '❌ Missing');
-console.log('  ZOHO_PRIVATELINK_SESSIONS:', ZOHO_PRIVATELINK_SESSIONS ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_BASE_URL:', ZOHO_BASE_URL ? '✅ Set' : '❌ Missing');
+console.log('  ZOHO_PUBLIC_KEY:', ZOHO_PUBLIC_KEY ? '✅ Set' : '❌ Missing');
 
-// 📸 Build public image URL
-const getPublicImageUrl = (recordId, fieldName, filePath) => {
-  if (!filePath) return "";
-  return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Events/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_ALL_EVENTS}?filepath=/${filePath}`;
-};
 
-// 🖼 Build public gallery image URLs
-const getGalleryImageUrls = (galleryId, galleryObj) => {
-  if (!galleryId || !Array.isArray(galleryObj?.obj)) return [];
-  return galleryObj.obj.map(imagePath => {
-    return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Event_Libraries/${galleryId}/Upload_Image/image-download/${ZOHO_PRIVATELINK_GALLERY}?filepath=/${imagePath.trim()}`;
-  });
-};
-
-// 🏢 Build public exhibitor image URLs
-const getExhibitorImageUrl = (recordId, fieldName, filePath) => {
-  if (!filePath) return "";
-  return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Exhibitor_Profiles/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_EXHIBITOR_PROFILES}?filepath=/${filePath}`;
-};
-
-// 📅 Build public session banner image URLs
-const getSessionBannerUrl = (recordId, fieldName, filePath) => {
-  if (!filePath) return "";
-  if (!ZOHO_PRIVATELINK_SESSIONS) {
-    console.warn(`⚠️ ZOHO_PRIVATELINK_SESSIONS is not defined. Session banner URL cannot be generated for session ${recordId}`);
-    return "";
-  }
-  return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Sessions/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_SESSIONS}?filepath=/${filePath}`;
-};
 
 // 🚀 Fetch full event data from Zoho Creator Custom API
 const fetchEventDetails = async (eventIdInput) => {
@@ -210,10 +180,14 @@ const fetchEventDetails = async (eventIdInput) => {
     // 🖼️ Xử lý gallery - support both old and new structure
     let galleryUrls = [];
     if (eventData.gallery && eventData.gallery.obj && Array.isArray(eventData.gallery.obj)) {
-      galleryUrls = getGalleryImageUrls(eventData.gelleryid, eventData.gallery);
+      galleryUrls = eventData.gallery.obj.map(imagePath => {
+        return getGalleryImageUrl(eventData.gelleryid, imagePath);
+      });
     } else if (Array.isArray(eventData.gallery)) {
       // Support old structure
-      galleryUrls = getGalleryImageUrls(eventData.gelleryid, { obj: eventData.gallery });
+      galleryUrls = eventData.gallery.map(imagePath => {
+        return getGalleryImageUrl(eventData.gelleryid, imagePath);
+      });
     }
 
     // 📅 Xử lý sessions data
@@ -230,7 +204,7 @@ const fetchEventDetails = async (eventIdInput) => {
         area_name: session.area_name || "",
         area_id: session.area_id ? String(session.area_id) : "",
         session_accessibility: session.session_accessibility || "",
-        session_banner: session.session_banner ? getSessionBannerUrl(String(session.id), "Banner", session.session_banner) : ""
+        session_banner: session.session_banner ? getSessionImageUrl(String(session.id), "Banner", session.session_banner) : ""
       };
     });
 
@@ -281,11 +255,11 @@ const fetchEventDetails = async (eventIdInput) => {
         exhibitors: processedExhibitors,
         sessions: processedSessions,
         sessions_by_date: sessionsByDate,
-        banner: getPublicImageUrl(String(eventData.id), "Banner", eventData.banner),
-        logo: getPublicImageUrl(String(eventData.id), "Logo", eventData.logo),
-        header: getPublicImageUrl(String(eventData.id), "Header", eventData.header),
-        footer: getPublicImageUrl(String(eventData.id), "Footer", eventData.footer),
-        favicon: getPublicImageUrl(String(eventData.id), "Favicon", eventData.favicon),
+        banner: getEventImageUrl(String(eventData.id), "Banner", eventData.banner),
+        logo: getEventImageUrl(String(eventData.id), "Logo", eventData.logo),
+        header: getEventImageUrl(String(eventData.id), "Header", eventData.header),
+        footer: getEventImageUrl(String(eventData.id), "Footer", eventData.footer),
+        favicon: getEventImageUrl(String(eventData.id), "Favicon", eventData.favicon),
         floor_plan_pdf: eventData.floor_plan_pdf || ""
       },
       gallery: galleryUrls,
@@ -297,4 +271,6 @@ const fetchEventDetails = async (eventIdInput) => {
   }
 };
 
-module.exports = { fetchEventDetails };
+module.exports = { 
+  fetchEventDetails
+};

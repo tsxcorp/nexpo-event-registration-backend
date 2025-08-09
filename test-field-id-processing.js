@@ -1,4 +1,4 @@
-const { submitRegistration } = require('./src/utils/zohoSubmit');
+const { submitRegistration } = require('./src/utils/zohoRegistrationSubmit');
 
 // Mock field definitions (similar to what would come from Zoho)
 const mockFieldDefinitions = [

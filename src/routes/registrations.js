@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { submitRegistration } = require('../utils/zohoSubmit');
+const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
 
 /**

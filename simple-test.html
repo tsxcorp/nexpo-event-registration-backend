@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Real-time Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f0f0f0; padding: 10px; height: 400px; overflow-y: auto; border: 1px solid #ccc; }
+        .controls { margin: 10px 0; }
+        button { padding: 10px; margin: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+    </style>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>🚀 Simple Real-time Test for Event: 4433256000012557772</h1>
+    
+    <div class="controls">
+        <button onclick="connect()">Connect</button>
+        <button onclick="disconnect()">Disconnect</button>
+        <button onclick="joinEvent()">Join Event Room</button>
+        <button onclick="subscribeRegistrations()">Subscribe Registrations</button>
+    </div>
+
+    <div class="controls">
+        <button onclick="testPush()">Test Push to Room</button>
+        <button onclick="simulateCheckin()">Simulate Check-in</button>
+        <button onclick="refreshData()">Force Refresh Data</button>
+    </div>
+
+    <div id="log" class="log"></div>
+
+    <script>
+        let socket = null;
+        const EVENT_ID = '4433256000012557772';
+
+        function log(message, type = 'info') {
+            const div = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            const className = type;
+            div.innerHTML += `<div class="${className}">[${time}] ${message}</div>`;
+            div.scrollTop = div.scrollHeight;
+        }
+
+        function connect() {
+            socket = io('http://localhost:3000');
+            
+            socket.on('connect', () => {
+                log('✅ Connected with ID: ' + socket.id, 'success');
+            });
+
+            socket.on('disconnect', () => {
+                log('❌ Disconnected', 'error');
+            });
+
+            socket.on('connected', (data) => {
+                log('🎉 Welcome: ' + JSON.stringify(data), 'success');
+            });
+
+            // Real-time events
+            socket.on('registration_data', (data) => {
+                log(`📊 Registration Data: ${data.count} records (${data.type})`, 'info');
+                if (data.event_id) {
+                    log(`   Event: ${data.event_id}`, 'info');
+                }
+            });
+
+            socket.on('registration_update', (data) => {
+                log(`📝 Registration Update: ${data.message || 'Update received'}`, 'info');
+            });
+
+            socket.on('checkin_update', (data) => {
+                log(`✅ Check-in: ${data.registration.Full_Name} -> ${data.new_status}`, 'success');
+            });
+
+            socket.on('checkin_notification', (data) => {
+                log(`🎉 ${data.message}`, 'success');
+            });
+
+            socket.on('test_message', (data) => {
+                log(`🧪 Test: ${JSON.stringify(data)}`, 'info');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function joinEvent() {
+            if (socket) {
+                socket.emit('join_event', EVENT_ID);
+                log(`📡 Joining event room: ${EVENT_ID}`, 'info');
+            }
+        }
+
+        function subscribeRegistrations() {
+            if (socket) {
+                socket.emit('subscribe_report', 'Registrations');
+                log('📡 Subscribing to Registrations report', 'info');
+            }
+        }
+
+        async function testPush() {
+            try {
+                const response = await fetch('/api/realtime/push/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        room: `event_${EVENT_ID}`,
+                        event: 'test_message',
+                        data: { message: 'Hello from test!', count: Math.floor(Math.random() * 100) }
+                    })
+                });
+                const result = await response.json();
+                log(`📤 Test sent: ${result.delivered ? 'delivered' : 'no clients in room'}`, 'info');
+            } catch (error) {
+                log(`❌ Test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function simulateCheckin() {
+            try {
+                const response = await fetch('/api/realtime/checkin/simulate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        registration_id: '4433256000013272115',
+                        event_id: EVENT_ID,
+                        full_name: 'Test User ' + Math.floor(Math.random() * 1000),
+                        status: true
+                    })
+                });
+                const result = await response.json();
+                log('📤 Check-in simulated', 'info');
+            } catch (error) {
+                log(`❌ Simulation failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshData() {
+            try {
+                const response = await fetch('/api/realtime/registrations/refresh', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        event_id: EVENT_ID,
+                        clear_cache: true
+                    })
+                });
+                const result = await response.json();
+                log(`📤 Data refreshed: ${result.count} records`, 'info');
+            } catch (error) {
+                log(`❌ Refresh failed: ${error.message}`, 'error');
+            }
+        }
+
+        log('🚀 Simple test loaded. Click Connect to start.', 'info');
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { parseExcel } = require('../utils/parseExcel');
-const { submitRegistration } = require('../utils/zohoSubmit');
+const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 
 const router = express.Router();
 const upload = multer();
@@ -68,26 +68,24 @@ const showPayloadComparison = (importPayload, rowIndex) => {
   console.log("📱 Registration route format:", JSON.stringify(registrationEquivalent, null, 2));
   console.log("📄 Import route format:", JSON.stringify(importPayload, null, 2));
   
-  // Show what zohoSubmit.js would process each into (Custom Function format)
-  console.log("\n💡 After zohoSubmit.js processing (Custom Function):");
-  console.log("📱 Registration → Zoho Custom Function:", {
-    title: registrationEquivalent.title,
-    full_name: registrationEquivalent.full_name,
-    email: registrationEquivalent.email,
-    mobile_number: registrationEquivalent.mobile_number,
-    event_info: registrationEquivalent.event_info,
-    custom_fields_value: JSON.stringify(registrationEquivalent.custom_fields_value),
-    group_members: "[]"
+  // Show what zohoRegistrationSubmit.js would process each into (REST API format)
+  console.log("\n💡 After zohoRegistrationSubmit.js processing (REST API):");
+  console.log("📱 Registration → Zoho REST API:", {
+    Full_Name: registrationEquivalent.full_name,
+    Email: registrationEquivalent.email,
+    Phone_Number: registrationEquivalent.mobile_number,
+    Event_Info: registrationEquivalent.event_info,
+    Custom_Fields_Value: registrationEquivalent.custom_fields_value,
+    Group_Members: "[]"
   });
   
-  console.log("📄 Import → Zoho Custom Function:", {
-    title: importPayload.title,
-    full_name: importPayload.full_name,
-    email: importPayload.email,
-    mobile_number: importPayload.mobile_number,
-    event_info: importPayload.event_info,
-    custom_fields_value: JSON.stringify(importPayload.custom_fields_value),
-    group_members: JSON.stringify(importPayload.group_members)
+  console.log("📄 Import → Zoho REST API:", {
+    Full_Name: importPayload.full_name,
+    Email: importPayload.email,
+    Phone_Number: importPayload.mobile_number,
+    Event_Info: importPayload.event_info,
+    Custom_Fields_Value: importPayload.custom_fields_value,
+    Group_Members: JSON.stringify(importPayload.group_members)
   });
   console.log("=".repeat(50));
 };
@@ -147,13 +145,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     console.log(`📊 Import request with session ID: ${sessionId}`);
     
     console.log(`📄 Processing import for event: ${eventId}, file size: ${req.file.buffer.length} bytes`);
-    console.log(`🔧 Environment: USE_ZOHO_CUSTOM_FUNCTION = ${process.env.USE_ZOHO_CUSTOM_FUNCTION}`);
-    
-    // ⚠️ IMPORTANT: Force Custom Function for imports to trigger Zoho scripts
-    if (process.env.USE_ZOHO_CUSTOM_FUNCTION !== 'true') {
-      console.warn('⚠️ Import requires Custom Function to trigger Zoho scripts. Setting USE_ZOHO_CUSTOM_FUNCTION=true for this import.');
-      process.env.USE_ZOHO_CUSTOM_FUNCTION = 'true';
-    }
+    console.log('🔧 Using Zoho Public REST API for imports');
     
     const records = parseExcel(req.file.buffer);
     console.log(`📋 Parsed ${records.length} records from Excel`);
@@ -171,7 +163,7 @@ router.post('/', upload.single('file'), async (req, res) => {
     const results = [];
 
     for (const [i, row] of records.entries()) {
-      // ✅ Format payload for Custom Function (lowercase field names)
+      // ✅ Format payload for REST API submission
       const payload = {
         title: row.title || row.salutation || row.Title || row.Salutation || "",
         full_name: row.full_name || row.Full_Name || row.name || row.Name || "",
@@ -274,94 +266,7 @@ router.post('/', upload.single('file'), async (req, res) => {
   }
 });
 
-/**
- * @swagger
- * /api/imports/debug-custom-function:
- *   post:
- *     summary: Debug Custom Function connectivity
- *     description: Test endpoint để debug lỗi 400 với Custom Function
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               eventId:
- *                 type: string
- *                 description: ID của sự kiện để test
- *                 example: "4433256000012332047"
- *             required:
- *               - eventId
- *     responses:
- *       200:
- *         description: Custom Function test thành công
- *       500:
- *         description: Custom Function test thất bại với troubleshooting info
- */
 
-// 🛠 Debug endpoint to test Custom Function connectivity
-router.post('/debug-custom-function', async (req, res) => {
-  try {
-    const { eventId } = req.body;
-    
-    if (!eventId) {
-      return res.status(400).json({ error: 'eventId is required for testing' });
-    }
-    
-    console.log('🔧 Testing Custom Function connectivity...');
-    
-    // Test payload
-    const testPayload = {
-      title: "Mr.",
-      full_name: "Test User",
-      email: "test@example.com",
-      mobile_number: "1234567890",
-      event_info: eventId,
-      custom_fields_value: {},
-      group_members: [],
-      fieldDefinitions: []
-    };
-    
-    // Force Custom Function
-    const originalEnv = process.env.USE_ZOHO_CUSTOM_FUNCTION;
-    process.env.USE_ZOHO_CUSTOM_FUNCTION = 'true';
-    
-    try {
-      const result = await submitRegistration(testPayload);
-      
-      res.json({
-        success: true,
-        message: 'Custom Function test successful',
-        result: result,
-        testPayload: testPayload
-      });
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Custom Function test failed',
-        details: err.message,
-        testPayload: testPayload,
-        troubleshooting: {
-          checkPoints: [
-            'Verify Custom Function "submitRegistration" exists in Zoho Creator',
-            'Check ZOHO_PUBLIC_KEY is correct',
-            'Verify ZOHO_BASE_URL and ZOHO_ORG_NAME are set correctly',
-            'Check if Custom Function accepts the data_map_str parameter',
-            'Verify Custom Function permissions and access'
-          ]
-        }
-      });
-    } finally {
-      // Restore original environment
-      process.env.USE_ZOHO_CUSTOM_FUNCTION = originalEnv;
-    }
-    
-  } catch (error) {
-    console.error("❌ Debug endpoint error:", error);
-    res.status(500).json({ error: "Debug test failed", details: error.message });
-  }
-});
 
 /**
  * @swagger

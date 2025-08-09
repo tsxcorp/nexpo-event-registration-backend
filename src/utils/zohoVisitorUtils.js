@@ -10,12 +10,6 @@ const {
   ZOHO_PRIVATELINK_GALLERY
 } = process.env;
 
-// 📸 Build public image URL (reuse from events)
-const getPublicImageUrl = (recordId, fieldName, filePath) => {
-  if (!filePath) return "";
-  return `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/${ZOHO_APP_NAME}/All_Events/${recordId}/${fieldName}/image-download/${ZOHO_PRIVATELINK_ALL_EVENTS}?filepath=/${filePath}`;
-};
-
 // 🚀 Fetch visitor data from Zoho Creator Custom API
 const fetchVisitorDetails = async (visitorIdInput) => {
   const apiUrl = `${ZOHO_BASE_URL}/creator/custom/${ZOHO_ORG_NAME}/NXP_getVisitor`;
