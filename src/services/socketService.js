@@ -18,12 +18,41 @@ class SocketService {
   initialize(httpServer) {
     this.io = new Server(httpServer, {
       cors: {
-        origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'https://creator.zoho.com'],
+        origin: function (origin, callback) {
+          // Allow requests with no origin (mobile apps, Postman, etc.)
+          if (!origin) return callback(null, true);
+          
+          // Allow Zoho Creator domains and development
+          const allowedOrigins = [
+            'https://creator.zoho.com',
+            'https://creator.zoho.eu',
+            'https://creator.zoho.in',
+            'https://creator.zoho.com.au',
+            'https://creatorapp.zoho.com',
+            'https://creatorapp.zoho.eu',
+            'https://creatorapp.zoho.in',
+            'https://creatorapp.zoho.com.au',
+            'http://localhost:3000',
+            'http://127.0.0.1:3000',
+            'https://nexpo-event-registration-backend-production.up.railway.app'
+          ];
+          
+          // Check if origin is allowed or is a Zoho subdomain
+          const isAllowed = allowedOrigins.includes(origin) || 
+                           origin.includes('.zoho.com') || 
+                           origin.includes('.zohostatic.com') ||
+                           origin.includes('.zohousercontent.com');
+          
+          callback(null, isAllowed);
+        },
         methods: ['GET', 'POST'],
         credentials: true
       },
       path: '/socket.io',
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      allowEIO3: true, // Allow Engine.IO v3 clients
+      pingTimeout: 60000,
+      pingInterval: 25000
     });
 
     this.setupEventHandlers();
@@ -107,20 +136,26 @@ class SocketService {
   async setupRedisSubscriptions() {
     if (!redisService.isReady()) {
       console.log('⚠️ Redis not ready, skipping Redis subscriptions');
+      console.log('📱 Socket.IO will work in standalone mode without Redis pub/sub');
       return;
     }
 
-    // Subscribe to all Zoho updates
-    await redisService.subscribe('zoho:*', (data, timestamp) => {
-      this.handleZohoUpdate(data, timestamp);
-    });
+    try {
+      // Subscribe to all Zoho updates
+      await redisService.subscribe('zoho:*', (data, timestamp) => {
+        this.handleZohoUpdate(data, timestamp);
+      });
 
-    // Subscribe to registration updates specifically
-    await redisService.subscribe('zoho:Registrations:*', (data, timestamp) => {
-      this.handleRegistrationUpdate(data, timestamp);
-    });
+      // Subscribe to registration updates specifically
+      await redisService.subscribe('zoho:Registrations:*', (data, timestamp) => {
+        this.handleRegistrationUpdate(data, timestamp);
+      });
 
-    console.log('✅ Redis subscriptions setup for Socket.IO');
+      console.log('✅ Redis subscriptions setup for Socket.IO');
+    } catch (error) {
+      console.error('❌ Failed to setup Redis subscriptions:', error.message);
+      console.log('📱 Socket.IO will continue without Redis pub/sub');
+    }
   }
 
   /**
@@ -249,12 +284,16 @@ class SocketService {
       last_updated: new Date().toISOString()
     };
 
-    // Cache the data first
+    // Cache the data first (if Redis is available)
     if (redisService.isReady()) {
-      await redisService.cacheZohoData('Registrations', { event_id: eventId }, payload, 300);
-      
-      // Publish to Redis for other instances
-      await redisService.publishZohoUpdate('Registrations', eventId, updateType, payload);
+      try {
+        await redisService.cacheZohoData('Registrations', { event_id: eventId }, payload, 300);
+        
+        // Publish to Redis for other instances
+        await redisService.publishZohoUpdate('Registrations', eventId, updateType, payload);
+      } catch (error) {
+        console.warn('⚠️ Redis operation failed, continuing without cache:', error.message);
+      }
     }
 
     // Send to event-specific room
@@ -281,12 +320,16 @@ class SocketService {
       timestamp: new Date().toISOString()
     };
 
-    // Publish to Redis
+    // Publish to Redis (if available)
     if (redisService.isReady()) {
-      await redisService.publishZohoUpdate('Registrations', eventId, 'checkin_update', payload);
+      try {
+        await redisService.publishZohoUpdate('Registrations', eventId, 'checkin_update', payload);
+      } catch (error) {
+        console.warn('⚠️ Redis publish failed, continuing without Redis:', error.message);
+      }
     }
 
-    // Real-time push
+    // Real-time push via Socket.IO (always works)
     if (eventId) {
       this.broadcastToRoom(`event_${eventId}`, 'checkin_update', payload);
     }

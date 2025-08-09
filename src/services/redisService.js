@@ -10,17 +10,74 @@ class RedisService {
     this.publisher = null;
     this.subscriber = null;
     this.isConnected = false;
+    this.retryAttempts = 0;
+    this.maxRetries = 3;
+    this.retryDelay = 5000; // 5 seconds
     
     // Configuration - Use REDIS_URL if available, otherwise fallback to individual config
-    this.config = process.env.REDIS_URL ? {
-      url: process.env.REDIS_URL
-    } : {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: process.env.REDIS_PORT || 6379,
-      password: process.env.REDIS_PASSWORD || null,
-      db: process.env.REDIS_DB || 0,
-      retryDelayOnFailover: 100,
-      maxRetriesPerRequest: 3
+    this.config = this.getRedisConfig();
+    
+    console.log('🔧 Redis config initialized:', {
+      hasUrl: !!process.env.REDIS_URL,
+      hasHost: !!process.env.REDIS_HOST,
+      isLocal: !process.env.REDIS_URL && !process.env.REDIS_HOST
+    });
+  }
+
+  /**
+   * Get Redis configuration with proper fallbacks
+   */
+  getRedisConfig() {
+    // Priority 1: REDIS_URL (for cloud providers like Railway, Heroku)
+    if (process.env.REDIS_URL) {
+      return {
+        url: process.env.REDIS_URL,
+        socket: {
+          reconnectStrategy: (retries) => {
+            if (retries >= this.maxRetries) {
+              console.log('❌ Redis max retries reached, giving up');
+              return false;
+            }
+            console.log(`🔄 Redis reconnecting in ${this.retryDelay}ms (attempt ${retries + 1}/${this.maxRetries})`);
+            return this.retryDelay;
+          },
+          connectTimeout: 10000,
+          lazyConnect: true
+        }
+      };
+    }
+    
+    // Priority 2: Individual Redis config
+    if (process.env.REDIS_HOST) {
+      return {
+        host: process.env.REDIS_HOST,
+        port: parseInt(process.env.REDIS_PORT) || 6379,
+        password: process.env.REDIS_PASSWORD || undefined,
+        db: parseInt(process.env.REDIS_DB) || 0,
+        socket: {
+          reconnectStrategy: (retries) => {
+            if (retries >= this.maxRetries) return false;
+            return this.retryDelay;
+          },
+          connectTimeout: 10000,
+          lazyConnect: true
+        }
+      };
+    }
+    
+    // Priority 3: Local Redis fallback (development only)
+    console.log('⚠️ No Redis config found, using local fallback (development only)');
+    return {
+      host: 'localhost',
+      port: 6379,
+      socket: {
+        reconnectStrategy: (retries) => {
+          if (retries >= 2) return false; // Fail faster for local
+          return 1000;
+        },
+        connectTimeout: 5000,
+        lazyConnect: true
+      }
     };
   }
 
@@ -28,35 +85,77 @@ class RedisService {
    * Initialize Redis connections
    */
   async connect() {
+    if (this.isConnected && this.client?.isReady) {
+      console.log('✅ Redis already connected');
+      return true;
+    }
+
     try {
-      // Single client for cache operations (simplify for now)
+      console.log('🔄 Attempting Redis connection...');
+      
+      // Create primary client for cache operations
       this.client = redis.createClient(this.config);
       
-      // For pub/sub, we'll use the same client
-      this.publisher = this.client;
-      this.subscriber = this.client;
-
-      // Error handler
+      // Setup event handlers before connecting
       this.client.on('error', (err) => {
         console.error('❌ Redis Error:', err.message);
         this.isConnected = false;
+        
+        // Try to reconnect after a delay if not at max retries
+        if (this.retryAttempts < this.maxRetries) {
+          this.retryAttempts++;
+          console.log(`🔄 Will retry Redis connection (${this.retryAttempts}/${this.maxRetries})`);
+        }
       });
 
       this.client.on('connect', () => {
-        console.log('✅ Redis connected successfully');
-        this.isConnected = true;
+        console.log('🔌 Redis connecting...');
       });
 
-      // Connect single client
-      await this.client.connect();
+      this.client.on('ready', () => {
+        console.log('✅ Redis connected and ready');
+        this.isConnected = true;
+        this.retryAttempts = 0; // Reset retry counter on successful connection
+      });
 
-      this.isConnected = true;
-      console.log('✅ Redis connected successfully');
-      
+      this.client.on('end', () => {
+        console.log('🔌 Redis connection ended');
+        this.isConnected = false;
+      });
+
+      this.client.on('reconnecting', () => {
+        console.log('🔄 Redis reconnecting...');
+      });
+
+      // Connect with timeout
+      await Promise.race([
+        this.client.connect(),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Connection timeout')), 10000)
+        )
+      ]);
+
+      // For pub/sub, we'll create separate clients only if needed
+      this.publisher = this.client;
+      this.subscriber = this.client;
+
+      console.log('✅ Redis service initialized successfully');
       return true;
+      
     } catch (error) {
-      console.error('❌ Redis connection failed:', error);
+      console.error('❌ Redis connection failed:', error.message);
       this.isConnected = false;
+      
+      // Clean up failed connection
+      if (this.client) {
+        try {
+          await this.client.disconnect();
+        } catch (disconnectError) {
+          // Ignore disconnect errors for failed connections
+        }
+        this.client = null;
+      }
+      
       return false;
     }
   }
