@@ -58,6 +58,7 @@ app.use(cors({
                      origin.includes('.zohostatic.com') ||
                      origin.includes('.zohousercontent.com') ||
                      origin.includes('.zappsusercontent.com') ||
+                     origin.includes('.zappsusercontent.com') ||
                      origin.includes('.sigmausercontent.com') ||
                      origin.includes('.qntrlusercontent.com');
     
