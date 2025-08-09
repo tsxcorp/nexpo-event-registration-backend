@@ -42,7 +42,7 @@ const fetch = require('node-fetch');
 router.get('/registrations/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { status = 'all', group_only = false, limit = 200 } = req.query;
+    const { status = 'all', group_only = false, limit = 5000 } = req.query;
     
     console.log(`🎯 Event filtering request: Event=${eventId}, Status=${status}, GroupOnly=${group_only}`);
 
