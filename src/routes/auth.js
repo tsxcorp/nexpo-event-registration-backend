@@ -377,4 +377,52 @@ curl -X POST http://localhost:3000/api/auth/zoho/token \\
   }
 });
 
+/**
+ * @swagger
+ * /api/auth/zoho/reload-tokens:
+ *   post:
+ *     summary: Reload tokens from file
+ *     description: Force reload access and refresh tokens from tokens.json file
+ *     responses:
+ *       200:
+ *         description: Tokens reloaded successfully
+ *       500:
+ *         description: Error reloading tokens
+ */
+router.post('/zoho/reload-tokens', async (req, res) => {
+  try {
+    console.log('🔄 Force reloading tokens from file...');
+    
+    // Force reload from file
+    const fs = require('fs');
+    const path = require('path');
+    const tokenFile = path.join(process.cwd(), 'tokens.json');
+    
+    if (fs.existsSync(tokenFile)) {
+      const tokens = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
+      zohoOAuthService.setTokens(tokens);
+      console.log('✅ Tokens reloaded from file successfully');
+      
+      res.json({
+        success: true,
+        message: 'Tokens reloaded successfully',
+        expiresAt: new Date(tokens.expiresAt).toISOString(),
+        isValid: Date.now() < tokens.expiresAt
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'tokens.json file not found'
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error reloading tokens:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reload tokens',
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

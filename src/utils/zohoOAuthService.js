@@ -250,6 +250,31 @@ class ZohoOAuthService {
     };
     console.log('🗑️ All tokens cleared');
   }
+
+  /**
+   * Start auto-refresh timer to prevent token expiration
+   */
+  startAutoRefreshTimer() {
+    // Check every 30 minutes
+    setInterval(async () => {
+      try {
+        // Check if token will expire in next 10 minutes
+        if (this.tokenStore.accessToken && this.tokenStore.expiresAt) {
+          const tenMinutesFromNow = Date.now() + (10 * 60 * 1000);
+          
+          if (this.tokenStore.expiresAt < tenMinutesFromNow) {
+            console.log('⏰ Token expiring soon, proactively refreshing...');
+            await this.refreshAccessToken();
+            console.log('✅ Proactive token refresh completed');
+          }
+        }
+      } catch (error) {
+        console.error('❌ Auto-refresh timer error:', error.message);
+      }
+    }, 30 * 60 * 1000); // Every 30 minutes
+    
+    console.log('⏰ Auto-refresh timer started (checks every 30 minutes)');
+  }
 }
 
 // Export singleton instance
