@@ -48,7 +48,8 @@ app.use(cors({
       'https://creatorapp.zoho.com.au',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
-      'https://nexpo-event-registration-backend-production.up.railway.app'
+      'https://nexpo-event-registration-backend-production.up.railway.app',
+      'https://registration.nexpo.vn'
     ];
     
     // Check if origin is allowed or is a Zoho subdomain
