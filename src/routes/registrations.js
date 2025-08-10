@@ -158,6 +158,23 @@ router.post('/', async (req, res) => {
 
   } catch (err) {
     console.error("❌ Zoho submission error:", err.message);
+    
+    // Check if this is a buffered submission response
+    if (err.message.includes('API limit reached') && err.message.includes('buffered')) {
+      // Extract buffer ID from error message
+      const bufferIdMatch = err.message.match(/ID: ([^)]+)/);
+      const bufferId = bufferIdMatch ? bufferIdMatch[1] : 'unknown';
+      
+      return res.status(202).json({
+        success: true,
+        status: 'buffered',
+        message: 'Registration has been buffered due to API limit. Will be processed automatically when limit resets.',
+        bufferId: bufferId,
+        retryTime: 'Next day at 00:00',
+        note: 'Your registration is safe and will be processed automatically'
+      });
+    }
+    
     res.status(500).json({
       success: false,
       error: 'Failed to submit form',

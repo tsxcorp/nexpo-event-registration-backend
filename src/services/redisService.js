@@ -364,6 +364,134 @@ class RedisService {
     
     return `zoho:${reportName}:${Buffer.from(filterStr).toString('base64')}`;
   }
+
+  // ==================== BUFFER SYSTEM HELPERS ====================
+
+  /**
+   * Set hash field
+   */
+  async hset(key, field, value, ttlSeconds = null) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, skipping cache set');
+      return false;
+    }
+
+    try {
+      const result = await this.client.hSet(key, field, value);
+      
+      // Set TTL if provided
+      if (ttlSeconds) {
+        await this.client.expire(key, ttlSeconds);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Redis HSET error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get hash field
+   */
+  async hget(key, field) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, cache miss');
+      return null;
+    }
+
+    try {
+      return await this.client.hGet(key, field);
+    } catch (error) {
+      console.error('❌ Redis HGET error:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get all hash fields
+   */
+  async hgetall(key) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, cache miss');
+      return {};
+    }
+
+    try {
+      return await this.client.hGetAll(key);
+    } catch (error) {
+      console.error('❌ Redis HGETALL error:', error);
+      return {};
+    }
+  }
+
+  /**
+   * Delete hash field
+   */
+  async hdel(key, field) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, skipping cache delete');
+      return false;
+    }
+
+    try {
+      return await this.client.hDel(key, field);
+    } catch (error) {
+      console.error('❌ Redis HDEL error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Add to sorted set
+   */
+  async zadd(key, score, member) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, skipping sorted set add');
+      return false;
+    }
+
+    try {
+      return await this.client.zAdd(key, { score, value: member });
+    } catch (error) {
+      console.error('❌ Redis ZADD error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get range from sorted set by score
+   */
+  async zrangebyscore(key, min, max) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, cache miss');
+      return [];
+    }
+
+    try {
+      return await this.client.zRangeByScore(key, min, max);
+    } catch (error) {
+      console.error('❌ Redis ZRANGEBYSCORE error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Remove from sorted set
+   */
+  async zrem(key, member) {
+    if (!this.isReady()) {
+      console.warn('⚠️ Redis not ready, skipping sorted set remove');
+      return false;
+    }
+
+    try {
+      return await this.client.zRem(key, member);
+    } catch (error) {
+      console.error('❌ Redis ZREM error:', error);
+      return false;
+    }
+  }
 }
 
 // Export singleton instance

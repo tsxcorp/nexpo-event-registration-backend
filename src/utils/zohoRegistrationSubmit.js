@@ -219,25 +219,31 @@ const submitRegistration = async (data) => {
                              err.message.includes('too many requests');
       
       if (isApiLimitError) {
-        console.log(`🚨 API limit reached for record ${i + 1}, buffering submission...`);
+        console.log(`🚨 API limit reached for record ${i + 1}, attempting to buffer submission...`);
         
-        // Buffer the entire submission for retry
-        const bufferResult = await redisBufferService.addToBuffer(
-          data, 
-          'API_LIMIT', 
-          eventInfo
-        );
-        
-        if (bufferResult.success) {
-          // Set API limit reset time (next day)
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(0, 0, 0, 0);
-          await redisBufferService.setLimitResetTime(tomorrow);
+        try {
+          // Buffer the entire submission for retry
+          const bufferResult = await redisBufferService.addToBuffer(
+            data, 
+            'API_LIMIT', 
+            eventInfo
+          );
           
-          throw new Error(`API limit reached. Submission buffered (ID: ${bufferResult.bufferId}). Will retry automatically when limit resets.`);
-        } else {
-          throw new Error(`API limit reached and failed to buffer submission: ${bufferResult.error}`);
+          if (bufferResult.success) {
+            // Set API limit reset time (next day)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(0, 0, 0, 0);
+            await redisBufferService.setLimitResetTime(tomorrow);
+            
+            throw new Error(`API limit reached. Submission buffered (ID: ${bufferResult.bufferId}). Will retry automatically when limit resets.`);
+          } else {
+            console.error('❌ Failed to buffer submission:', bufferResult.error);
+            throw new Error(`API limit reached and failed to buffer submission: ${bufferResult.error}`);
+          }
+        } catch (bufferError) {
+          console.error('❌ Error in buffer system:', bufferError);
+          throw new Error(`API limit reached. Unable to buffer submission due to: ${bufferError.message}`);
         }
       }
       
