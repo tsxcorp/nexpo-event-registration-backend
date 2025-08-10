@@ -11,6 +11,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const redisService = require('./services/redisService');
 const socketService = require('./services/socketService');
 const zohoOAuthService = require('./utils/zohoOAuthService');
+const bufferScheduler = require('./services/bufferScheduler');
 
 const app = express();
 
@@ -89,6 +90,7 @@ const authRoutes = require('./routes/auth');                  // /api/auth (OAut
 const zohoCreatorRoutes = require('./routes/zohoCreator');     // /api/zoho-creator (REST APIs)
 const realtimeRoutes = require('./routes/realtime');          // /api/realtime (Socket.IO + Redis)
 const eventFilteringRoutes = require('./routes/eventFiltering'); // /api/event-filtering (Client-side filtering)
+const bufferRoutes = require('./routes/buffer'); // /api/buffer (Redis Buffer Management)
 
 app.use('/api/events', eventRoutes);
 app.use('/api/registrations', registrationRoutes);
@@ -100,6 +102,7 @@ app.use('/oauth', authRoutes); // Additional route for OAuth callback
 app.use('/api/zoho-creator', zohoCreatorRoutes);
 app.use('/api/realtime', realtimeRoutes);
 app.use('/api/event-filtering', eventFilteringRoutes);
+app.use('/api/buffer', bufferRoutes);
 
 // Serve static files for widget testing
 app.use(express.static('./', { 
@@ -209,6 +212,14 @@ httpServer.listen(PORT, async () => {
     console.log(`   🔑 Zoho OAuth: ✅ Auto-refresh enabled`);
   } catch (error) {
     console.log(`   🔑 Zoho OAuth: ⚠️ Auto-refresh failed - ${error.message}`);
+  }
+  
+  // Start buffer scheduler for API limit handling
+  try {
+    bufferScheduler.start();
+    console.log(`   📦 Buffer Scheduler: ✅ Auto-retry enabled`);
+  } catch (error) {
+    console.log(`   📦 Buffer Scheduler: ⚠️ Auto-retry failed - ${error.message}`);
   }
   
   console.log('');

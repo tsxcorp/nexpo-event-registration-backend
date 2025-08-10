@@ -1,4 +1,5 @@
 const axios = require("axios");
+const redisBufferService = require('../services/redisBufferService');
 
 /**
  * Process Custom_Fields_Value to handle both field_id and field label formats
@@ -211,6 +212,35 @@ const submitRegistration = async (data) => {
       responses.push(resData);
     } catch (err) {
       console.error(`❌ Error pushing record ${i + 1}:`, err.response?.data || err.message);
+      
+      // Check if this is an API limit error
+      const isApiLimitError = err.response?.data?.code === 4000 || 
+                             err.message.includes('API limit') || 
+                             err.message.includes('too many requests');
+      
+      if (isApiLimitError) {
+        console.log(`🚨 API limit reached for record ${i + 1}, buffering submission...`);
+        
+        // Buffer the entire submission for retry
+        const bufferResult = await redisBufferService.addToBuffer(
+          data, 
+          'API_LIMIT', 
+          eventInfo
+        );
+        
+        if (bufferResult.success) {
+          // Set API limit reset time (next day)
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(0, 0, 0, 0);
+          await redisBufferService.setLimitResetTime(tomorrow);
+          
+          throw new Error(`API limit reached. Submission buffered (ID: ${bufferResult.bufferId}). Will retry automatically when limit resets.`);
+        } else {
+          throw new Error(`API limit reached and failed to buffer submission: ${bufferResult.error}`);
+        }
+      }
+      
       throw new Error(`Zoho submit failed for record ${i + 1}: ${err.message}`);
     }
   }
