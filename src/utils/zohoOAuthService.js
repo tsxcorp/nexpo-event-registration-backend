@@ -211,6 +211,53 @@ class ZohoOAuthService {
   }
 
   /**
+   * Execute a Zoho API call with automatic token refresh and retry
+   * @param {Function} apiCall - Function that makes the API call
+   * @param {number} maxRetries - Maximum number of retries (default: 2)
+   * @returns {Object} API response
+   */
+  async executeWithTokenRefresh(apiCall, maxRetries = 2) {
+    let lastError;
+    
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Get valid token before each attempt
+        const token = await this.getValidAccessToken();
+        
+        // Execute the API call
+        const response = await apiCall(token);
+        
+        // If successful, return the response
+        return response;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if it's a 401 error and we haven't exhausted retries
+        if (error.response?.status === 401 && attempt < maxRetries) {
+          console.log(`🔄 401 error on attempt ${attempt + 1}, refreshing token and retrying...`);
+          
+          try {
+            // Force refresh token
+            await this.refreshAccessToken();
+            console.log('✅ Token refreshed, retrying API call...');
+            continue; // Retry with new token
+          } catch (refreshError) {
+            console.error('❌ Token refresh failed:', refreshError.message);
+            throw new Error(`API call failed and token refresh unsuccessful: ${refreshError.message}`);
+          }
+        }
+        
+        // If not 401 or max retries reached, throw the error
+        throw error;
+      }
+    }
+    
+    // If we get here, all retries failed
+    throw lastError;
+  }
+
+  /**
    * Set tokens manually (for testing or if tokens are stored externally)
    * @param {Object} tokens - Token object with accessToken, refreshToken, expiresAt
    */

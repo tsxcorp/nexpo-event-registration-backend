@@ -10,6 +10,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 // Import services
 const redisService = require('./services/redisService');
 const socketService = require('./services/socketService');
+const zohoOAuthService = require('./utils/zohoOAuthService');
 
 const app = express();
 
@@ -201,5 +202,14 @@ httpServer.listen(PORT, async () => {
   console.log(`   🔌 WebSocket/Socket.IO: ✅ Ready`);
   console.log(`   📊 Redis Cache: ${redisService.isReady() ? '✅ Connected' : '❌ Disconnected'}`);
   console.log(`   📘 API Documentation: ✅ Available at /docs`);
+  
+  // Start Zoho OAuth auto-refresh timer
+  try {
+    zohoOAuthService.startAutoRefreshTimer();
+    console.log(`   🔑 Zoho OAuth: ✅ Auto-refresh enabled`);
+  } catch (error) {
+    console.log(`   🔑 Zoho OAuth: ⚠️ Auto-refresh failed - ${error.message}`);
+  }
+  
   console.log('');
 });

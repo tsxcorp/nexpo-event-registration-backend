@@ -1,153 +1,4 @@
 // ===== MINIMAL WIDGET - LOAD ALL DATA ONCE + INSTANT SEARCH =====
-// 🚀 REDIS-ENHANCED BACKEND INTEGRATION
-
-// Backend API Configuration with Enhanced Auto-Detection
-function getBackendConfig() {
-    // Force production URL for safety (CSP compatibility)
-    // Set FORCE_PRODUCTION = false only for local development
-    const FORCE_PRODUCTION = true;
-    
-    if (FORCE_PRODUCTION) {
-        console.log('🔒 FORCE_PRODUCTION enabled - using production URL');
-        return {
-            BASE_URL: 'https://nexpo-event-registration-backend-production.up.railway.app',
-            ENDPOINTS: {
-                EVENT_FILTERING: '/api/event-filtering/registrations',
-                EVENTS_LIST: '/api/event-filtering/events/list',
-                REALTIME_STATUS: '/api/status/realtime',
-                HEALTH: '/api/health'
-            }
-        };
-    }
-    
-    // Enhanced detection for Zoho Creator environment (backup logic)
-    const currentHostname = window.location.hostname;
-    const currentOrigin = window.location.origin;
-    const currentURL = window.location.href;
-    
-    // Check multiple ways to detect Zoho environment
-    const isZohoCreator = currentHostname.includes('zoho.com') || 
-                         currentHostname.includes('creator.zoho') ||
-                         currentHostname.includes('creatorapp.zoho') ||
-                         currentHostname.includes('zohostatic.com') ||
-                         currentHostname.includes('zappsusercontent.com') ||
-                         currentURL.includes('zoho.com') ||
-                         (window.parent && window.parent !== window && 
-                          (document.referrer.includes('zoho.com') || 
-                           document.referrer.includes('creator.zoho')));
-    
-    const PRODUCTION_URL = 'https://nexpo-event-registration-backend-production.up.railway.app';
-    const LOCAL_URL = 'http://localhost:3000';
-    
-    // Log detection for debugging
-    console.log('🔍 Environment Detection:', {
-        hostname: currentHostname,
-        origin: currentOrigin,
-        isZohoCreator: isZohoCreator,
-        selectedURL: isZohoCreator ? PRODUCTION_URL : LOCAL_URL,
-        referrer: document.referrer,
-        inIframe: window.parent !== window
-    });
-    
-    return {
-        BASE_URL: isZohoCreator ? PRODUCTION_URL : LOCAL_URL,
-        ENDPOINTS: {
-            EVENT_FILTERING: '/api/event-filtering/registrations',
-            EVENTS_LIST: '/api/event-filtering/events/list',
-            REALTIME_STATUS: '/api/status/realtime',
-            HEALTH: '/api/health'
-        }
-    };
-}
-
-// Force production URL if CSP detected or for safety in Zoho
-const BACKEND_CONFIG = (() => {
-    const config = getBackendConfig();
-    
-    // Force production URL if we detect CSP restrictions
-    // This happens when running in Zoho Creator
-    if (typeof window !== 'undefined' && 
-        (document.location.protocol === 'https:' && 
-         !config.BASE_URL.startsWith('https:'))) {
-        console.log('🔒 CSP/HTTPS detected, forcing production URL');
-        return {
-            ...config,
-            BASE_URL: 'https://nexpo-event-registration-backend-production.up.railway.app'
-        };
-    }
-    
-    return config;
-})();
-
-// Enhanced API request function with CORS support and error handling
-async function makeApiRequest(endpoint, options = {}) {
-    const url = `${BACKEND_CONFIG.BASE_URL}${endpoint}`;
-    
-    const defaultOptions = {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-            // Add origin header for CORS
-            'Origin': window.location.origin
-        },
-        mode: 'cors',
-        // Temporary fix for CORS credentials issue while production deploys
-        credentials: BACKEND_CONFIG.BASE_URL.includes('localhost') ? 'include' : 'omit'
-    };
-    
-    const finalOptions = { ...defaultOptions, ...options };
-    
-    // Merge headers properly
-    if (options.headers) {
-        finalOptions.headers = { ...defaultOptions.headers, ...options.headers };
-    }
-    
-    console.log('🌐 Making API request to:', url);
-    console.log('📋 Request options:', finalOptions);
-    
-    try {
-        const response = await fetch(url, finalOptions);
-        console.log('📥 Response status:', response.status);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const data = await response.json();
-        console.log('✅ API request successful');
-        return data;
-    } catch (error) {
-        console.error('❌ API Request failed:', error);
-        throw error;
-    }
-}
-
-// Enhanced API request with retry logic
-async function makeApiRequestWithRetry(endpoint, options = {}, maxRetries = 3) {
-    let lastError;
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            console.log(`🔄 API request attempt ${attempt}/${maxRetries} to: ${endpoint}`);
-            const result = await makeApiRequest(endpoint, options);
-            console.log('✅ API request succeeded');
-            return result;
-        } catch (error) {
-            lastError = error;
-            console.error(`❌ Attempt ${attempt} failed:`, error.message);
-            
-            if (attempt < maxRetries) {
-                const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-                console.log(`⏳ Retrying in ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-    }
-    
-    throw new Error(`Failed to make API request after ${maxRetries} attempts: ${lastError.message}`);
-}
 
 // Global variables (keep it simple!)
 let ALL_VISITORS = []; // Load once, use everywhere
@@ -158,10 +9,6 @@ let TYPE_FILTER = '';
 let DATE_FILTER = '';
 let CURRENT_PAGE = 1;
 let PAGE_SIZE = 50;
-
-// 🚀 REDIS-ENHANCED: Real-time features
-let SOCKET_IO = null;
-let REAL_TIME_ENABLED = false;
 
 // Selection state
 let SELECTED_VISITOR_IDS = new Set();
@@ -175,216 +22,6 @@ let EXHIBITOR_STATUS_FILTER = '';
 let CURRENT_EXHIBITOR_PAGE = 1;
 let EXHIBITOR_PAGE_SIZE = 20;
 let SELECTED_EXHIBITOR_IDS = new Set();
-
-// 🚀 ENHANCED: Setup real-time features with better error handling
-async function setupRealTimeFeatures(eventId) {
-    try {
-        console.log('🔌 Setting up real-time features for event:', eventId);
-        console.log('🌐 Backend URL:', BACKEND_CONFIG.BASE_URL);
-        
-        // Real-time features disabled due to Zoho Creator CSP restrictions
-        console.log('⚠️ Real-time features disabled due to Zoho Creator CSP restrictions');
-        console.log('📝 Socket.IO connections blocked by Content Security Policy');
-        console.log('🔄 Widget will work in standard mode without real-time updates');
-        
-        // CSP in Zoho Creator blocks external WebSocket connections:
-        // connect-src https://*.zappsusercontent.com https://*.zohostatic.com ...
-        // This prevents Socket.IO from connecting to external backend
-        
-        return;
-    } catch (error) {
-        console.warn('⚠️ Could not setup real-time features:', error.message);
-        console.log('📱 Widget will continue without real-time updates');
-    }
-}
-
-// Enhanced Socket.IO library loading
-function loadSocketIOLibrary() {
-    return new Promise((resolve, reject) => {
-        console.log('📦 Loading Socket.IO library...');
-        
-        const script = document.createElement('script');
-        script.src = `${BACKEND_CONFIG.BASE_URL}/socket.io/socket.io.js`;
-        
-        script.onload = () => {
-            console.log('✅ Socket.IO library loaded successfully');
-            resolve();
-        };
-        
-        script.onerror = () => {
-            console.error('❌ Failed to load Socket.IO library');
-            reject(new Error('Failed to load Socket.IO library'));
-        };
-        
-        document.head.appendChild(script);
-    });
-}
-
-function connectRealTime(eventId) {
-    try {
-        console.log('🔄 Connecting to WebSocket:', BACKEND_CONFIG.BASE_URL);
-        
-        // Disconnect existing connection if any
-        if (SOCKET_IO) {
-            SOCKET_IO.disconnect();
-        }
-        
-        // Create new Socket.IO connection with enhanced configuration
-        SOCKET_IO = io(BACKEND_CONFIG.BASE_URL, {
-            path: '/socket.io',
-            transports: ['websocket', 'polling'], // Allow both transports
-            timeout: 10000,
-            reconnection: true,
-            reconnectionAttempts: 5,
-            reconnectionDelay: 2000,
-            reconnectionDelayMax: 5000,
-            maxReconnectionAttempts: 5,
-            forceNew: true,
-            // CORS settings
-            withCredentials: true,
-            extraHeaders: {
-                'Origin': window.location.origin
-            }
-        });
-        
-        // Enhanced connection event handlers
-        SOCKET_IO.on('connect', () => {
-            console.log('✅ WebSocket connected successfully');
-            console.log('🆔 Socket ID:', SOCKET_IO.id);
-            console.log('🚌 Transport:', SOCKET_IO.io.engine.transport.name);
-            REAL_TIME_ENABLED = true;
-            
-            // Join event room using correct event name
-            if (eventId) {
-                SOCKET_IO.emit('join_event', eventId);
-                console.log('📍 Joining event room:', eventId);
-            }
-            
-            // Subscribe to registrations report
-            SOCKET_IO.emit('subscribe_report', 'Registrations');
-            console.log('📊 Subscribing to Registrations report');
-        });
-        
-        SOCKET_IO.on('disconnect', (reason) => {
-            console.log('🔌 WebSocket disconnected:', reason);
-            REAL_TIME_ENABLED = false;
-        });
-        
-        SOCKET_IO.on('connect_error', (error) => {
-            console.error('❌ WebSocket connection error:', error);
-            REAL_TIME_ENABLED = false;
-            
-            // Fallback to polling if websocket fails
-            if (SOCKET_IO.io.engine.transport.name === 'websocket') {
-                console.log('🔄 Falling back to polling transport');
-                SOCKET_IO.io.opts.transports = ['polling'];
-            }
-        });
-        
-        SOCKET_IO.on('reconnect', (attemptNumber) => {
-            console.log('🔄 WebSocket reconnected after', attemptNumber, 'attempts');
-            REAL_TIME_ENABLED = true;
-        });
-        
-        SOCKET_IO.on('reconnect_error', (error) => {
-            console.error('❌ WebSocket reconnection failed:', error);
-        });
-        
-        SOCKET_IO.on('reconnect_failed', () => {
-            console.error('❌ WebSocket reconnection failed permanently');
-            REAL_TIME_ENABLED = false;
-        });
-        
-        // Server message handlers
-        SOCKET_IO.on('connected', (data) => {
-            console.log('📨 Server welcome message:', data);
-        });
-        
-        SOCKET_IO.on('joined_event', (data) => {
-            console.log('📍 Joined event room:', data);
-        });
-        
-        SOCKET_IO.on('subscribed_report', (data) => {
-            console.log('📊 Subscribed to report:', data);
-        });
-        
-        // Enhanced data event handlers
-        SOCKET_IO.on('registration_data', (data) => {
-            console.log('📥 Registration data received:', data);
-            handleRealTimeUpdate(data);
-        });
-        
-        SOCKET_IO.on('registration_update', (data) => {
-            console.log('🔄 Registration update received:', data);
-            handleRealTimeUpdate(data);
-        });
-        
-        SOCKET_IO.on('checkin_update', (data) => {
-            console.log('🎫 Check-in update received:', data);
-            handleCheckInUpdate(data);
-        });
-        
-        SOCKET_IO.on('event_update', (data) => {
-            console.log('📅 Event update received:', data);
-            handleRealTimeUpdate(data);
-        });
-        
-    } catch (error) {
-        console.error('❌ Error setting up WebSocket connection:', error);
-        REAL_TIME_ENABLED = false;
-    }
-}
-
-function handleRealTimeUpdate(data) {
-    if (data.event_id === CURRENT_EVENT?.id) {
-        console.log('🔄 Updating visitor data in real-time...');
-        
-        // Refresh data automatically
-        if (data.type === 'new_registration') {
-            refreshVisitorData();
-        } else if (data.type === 'check_in') {
-            updateVisitorCheckInStatus(data.visitor_id, true);
-        }
-    }
-}
-
-function handleCheckInUpdate(data) {
-    if (data.event_id === CURRENT_EVENT?.id) {
-        updateVisitorCheckInStatus(data.visitor_id, data.checked_in);
-        updateStatsFromLocalData();
-    }
-}
-
-function updateVisitorCheckInStatus(visitorId, checkedIn) {
-    const visitor = ALL_VISITORS.find(v => v.id === visitorId);
-    if (visitor) {
-        visitor.checked_in = checkedIn;
-        
-        // Update table if visible
-        const checkbox = document.querySelector(`[data-visitor-id="${visitorId}"]`);
-        if (checkbox) {
-            const row = checkbox.closest('tr');
-            const statusCell = row.querySelector('.status-badge');
-            if (statusCell) {
-                statusCell.textContent = checkedIn ? 'Checked In' : 'Not Checked In';
-                statusCell.className = `status-badge ${checkedIn ? 'status-checked-in' : 'status-not-checked-in'}`;
-            }
-        }
-        
-        console.log(`✅ Updated visitor ${visitorId} check-in status: ${checkedIn}`);
-    }
-}
-
-async function refreshVisitorData() {
-    if (CURRENT_EVENT?.id) {
-        console.log('🔄 Refreshing visitor data due to real-time update...');
-        const batch = await loadVisitorBatch(CURRENT_EVENT.id, null, 1000);
-        if (batch && batch.visitors) {
-            ALL_VISITORS = batch.visitors;
-            performInstantSearch(); // Re-render table
-        }
-    }
-}
 
 // ===== 1. STARTUP: LOAD ALL DATA ONCE =====
 async function initializeWidget() {
@@ -472,9 +109,6 @@ async function initializeWidget() {
             // Load exhibitor data
             await loadExhibitorData(event.id);
             
-            // 🚀 Setup real-time features
-            await setupRealTimeFeatures(event.id);
-            
             setupAdvancedFilter();
             setupSearchInput();
             setupExhibitorSearchInput();
@@ -502,8 +136,9 @@ async function loadVisitorsWithCache(eventId, tenantStats) {
     // Load form fields for this event first (needed for proper field mapping)
     await fetchEventFormFields(eventId);
     
-    // Use cache for better performance
-    console.log('📦 Checking cache for optimized loading...');
+    // TEMPORARY: Clear cache to force fresh data with full custom fields
+    console.log('🧹 Clearing cache to test custom field filtering...');
+    clearVisitorCache();
     
     // Check cache first
     const cacheResult = compareWithCachedData(eventId, tenantStats);
@@ -664,73 +299,86 @@ async function loadVisitorsProgressively(eventId, tenantStats) {
     }
 }
 
-// 🚀 REDIS-ENHANCED: Load visitors using backend API
+// Load a specific batch of visitors
 async function loadVisitorBatch(eventId, cursor = null, maxRecords = 1000) {
-    try {
-        console.log(`🚀 Loading visitors from Redis-enhanced backend for event: ${eventId}`);
-        
-        // Build endpoint with parameters
-        const endpoint = `${BACKEND_CONFIG.ENDPOINTS.EVENT_FILTERING}/${eventId}?limit=${maxRecords}`;
-        
-        // Use enhanced API request function
-        const data = await makeApiRequestWithRetry(endpoint);
-        
-        if (data.success && data.data) {
-            console.log(`✅ Redis backend returned ${data.data.length} visitors`);
-            console.log(`📊 Stats: Total=${data.stats.total_for_event}, Checked In=${data.stats.checked_in}, Groups=${data.stats.group_registrations}`);
+    const config = {
+        app_name: 'nxp',
+        report_name: 'Registrations',
+        criteria: `Event_Info == ${eventId}`,
+        max_records: maxRecords,
+        field_config: 'all'
+    };
+    
+    if (cursor) {
+        config.record_cursor = cursor;
+    }
+    
+    const response = await ZOHO.CREATOR.DATA.getRecords(config);
+    
+    if (response.code === 3000 && response.data && response.data.length > 0) {
+        // Log first visitor to see structure (only once)
+        if (response.data.length > 0 && !window.VISITOR_STRUCTURE_LOGGED) {
+            console.log('🔍 Sample visitor data from Zoho:', response.data[0]);
+            console.log('🔍 Available keys:', Object.keys(response.data[0]));
+            console.log('🔍 Added_Time value:', response.data[0].Added_Time);
+            console.log('🔍 Added_Time type:', typeof response.data[0].Added_Time);
             
-            // Log first visitor to see structure (only once)
-            if (data.data.length > 0 && !window.VISITOR_STRUCTURE_LOGGED) {
-                console.log('🔍 Sample visitor data from Redis backend:', data.data[0]);
-                console.log('🔍 Available keys:', Object.keys(data.data[0]));
-                window.VISITOR_STRUCTURE_LOGGED = true;
+            // Check for Custom_Fields_Value
+            if (response.data[0].Custom_Fields_Value) {
+                console.log('🔍 Custom_Fields_Value found:', response.data[0].Custom_Fields_Value);
+                try {
+                    const customFields = JSON.parse(response.data[0].Custom_Fields_Value);
+                    console.log('🔍 Parsed custom fields:', customFields);
+                    console.log('🔍 Custom field keys:', Object.keys(customFields));
+                } catch (e) {
+                    console.log('🔍 Failed to parse Custom_Fields_Value:', e);
+                }
+        } else {
+                console.log('🔍 No Custom_Fields_Value found in this record');
             }
             
-            const visitors = data.data.map(record => {
-                // Parse custom fields if available
-                let customFields = {};
-                if (record.Custom_Fields_Value) {
-                    try {
-                        customFields = JSON.parse(record.Custom_Fields_Value);
-                    } catch (e) {
-                        console.warn('Failed to parse Custom_Fields_Value for record:', record.ID, e);
-                    }
+            window.VISITOR_STRUCTURE_LOGGED = true;
+        }
+        
+        const visitors = response.data.map(record => {
+            // Parse custom fields if available
+            let             customFields = {};
+            if (record.Custom_Fields_Value) {
+                try {
+                    customFields = JSON.parse(record.Custom_Fields_Value);
+                } catch (e) {
+                    console.warn('Failed to parse Custom_Fields_Value for record:', record.ID, e);
                 }
-                
-                // Debug: Check Group_Registration values
-                if (record.Group_Registration && record.Group_Registration !== "false") {
-                    console.log(`🔍 Found Group Registration: ${record.Full_Name} - Group_Registration: "${record.Group_Registration}" (type: ${typeof record.Group_Registration})`);
-                }
-                
-                return {
-                    id: record.ID,
-                    name: record.Full_Name || 'N/A',
-                    email: record.Email || 'N/A',
-                    phone: record.Phone_Number || 'N/A',
-                    checked_in: record.Check_In_Status === true || record.Check_In_Status === 'true',
-                    group_registration: record.Group_Registration === true || record.Group_Registration === 'true',
-                    redeem_id: record.Redeem_ID || 'N/A',
-                    salutation: record.Salutation || '',
-                    added_time: record.Added_Time || '',
-                    raw: record,
-                    customFields: customFields
-                };
-            });
+            }
+            
+            // Debug: Check Group_Registration values
+            if (record.Group_Registration && record.Group_Registration !== "false") {
+                console.log(`🔍 Found Group Registration: ${record.Full_Name} - Group_Registration: "${record.Group_Registration}" (type: ${typeof record.Group_Registration})`);
+            }
             
             return {
-                visitors: visitors,
-                totalCount: data.stats.total_for_event,
-                stats: data.stats,
-                hasMore: false // Backend fetches all data with client-side filtering
+                id: record.ID,
+                name: record.Full_Name || 'N/A',
+                email: record.Email || 'N/A',
+                phone: record.Phone_Number || 'N/A',
+                checked_in: record.Check_In_Status === 'Checked In',
+                group_registration: record.Group_Registration === "true" || record.Group_Registration === true,
+                redeem_id: record.Redeem_ID || 'N/A',
+                salutation: record.Salutation || '',
+                added_time: record.Added_Time || '',
+                raw: record,
+                customFields: customFields
             };
-        } else {
-            console.error('❌ Backend API error:', data);
-            return null;
-        }
-    } catch (error) {
-        console.error('❌ Error calling Redis backend:', error);
-        return null;
+        });
+        
+        return {
+            visitors: visitors,
+            cursor: response.record_cursor,
+            hasMore: !!response.record_cursor // Simple: if cursor exists, there's more data
+        };
     }
+    
+    return null;
 }
 
 // Load remaining visitors in background
@@ -981,10 +629,10 @@ function matchesDateFilter(visitor, dateFilter) {
     }
 }
 
-// Load tenant stats from custom API (NOT from Redis backend)
+// Load tenant stats from API (NOT from filtered data)
 async function loadTenantStats(userEmail) {
     try {
-        console.log('📊 Loading tenant stats from custom API...');
+        console.log('📊 Loading tenant stats from API...');
         const response = await ZOHO.CREATOR.DATA.invokeCustomApi({
             api_name: `getTenantInfo?publickey=nsHzZV3d8gB6SnSYFDBvZA2OU&tenant_email=${encodeURIComponent(userEmail)}`,
             workspace_name: "tsxcorp",
@@ -1000,14 +648,14 @@ async function loadTenantStats(userEmail) {
             const groupElement = document.getElementById('groupCount');
             const groupQuantityElement = document.getElementById('groupQuantity');
             
-            // Use custom API data for main stats
+            // Use API data for main stats
             if (totalElement) totalElement.textContent = event.total_registrations || 0;
             if (checkedInElement) checkedInElement.textContent = event.checked_in || 0;
             if (individualElement) individualElement.textContent = event.individual_registrations || 0;
             if (groupElement) groupElement.textContent = event.group_registrations || 0;
             if (groupQuantityElement) groupQuantityElement.textContent = event.group_quantity || 0;
             
-            console.log('✅ Custom API stats loaded:', {
+            console.log('✅ Tenant stats loaded:', {
                 total: event.total_registrations,
                 checkedIn: event.checked_in,
                 individual: event.individual_registrations,
@@ -1017,7 +665,7 @@ async function loadTenantStats(userEmail) {
             
             return event;
         } else {
-            throw new Error('No events found in custom API data');
+            throw new Error('No events found in tenant data');
         }
     } catch (error) {
         console.error('❌ Failed to load tenant stats:', error);

@@ -17,7 +17,7 @@ class ZohoCreatorAPI {
   }
 
   /**
-   * Make authenticated request to Zoho Creator API
+   * Make authenticated request to Zoho Creator API with automatic token refresh
    * @param {string} method - HTTP method
    * @param {string} endpoint - API endpoint
    * @param {Object} data - Request data
@@ -25,9 +25,7 @@ class ZohoCreatorAPI {
    * @returns {Object} API response
    */
   async makeRequest(method, endpoint, data = null, params = {}, customHeaders = {}) {
-    try {
-      const accessToken = await zohoOAuthService.getValidAccessToken();
-      
+    return await zohoOAuthService.executeWithTokenRefresh(async (accessToken) => {
       const url = `${this.config.baseUrl}/${this.config.accountOwnerName}/${this.config.appLinkName}/${endpoint}`;
       
       const config = {
@@ -52,24 +50,7 @@ class ZohoCreatorAPI {
       
       console.log('✅ API request successful');
       return response.data;
-      
-    } catch (error) {
-      console.error('❌ API request failed:', error.response?.data || error.message);
-      
-      // If token is invalid, try to refresh and retry once
-      if (error.response?.status === 401 && !params._retry) {
-        console.log('🔄 Token expired, attempting refresh and retry...');
-        try {
-          await zohoOAuthService.refreshAccessToken();
-          return await this.makeRequest(method, endpoint, data, { ...params, _retry: true });
-        } catch (refreshError) {
-          console.error('❌ Token refresh failed:', refreshError.message);
-          throw new Error('Authentication failed. Please re-authenticate.');
-        }
-      }
-      
-      throw new Error(`Zoho API Error: ${error.response?.data?.message || error.message}`);
-    }
+    });
   }
 
   /**
