@@ -236,7 +236,15 @@ const submitRegistration = async (data) => {
             tomorrow.setHours(0, 0, 0, 0);
             await redisBufferService.setLimitResetTime(tomorrow);
             
-            throw new Error(`API limit reached. Submission buffered (ID: ${bufferResult.bufferId}). Will retry automatically when limit resets.`);
+            // Return buffer result instead of throwing error
+            return {
+              success: true,
+              status: 'buffered',
+              bufferId: bufferResult.bufferId,
+              message: 'Registration has been buffered due to API limit. Will be processed automatically when limit resets.',
+              retryTime: 'Next day at 00:00',
+              note: 'Your registration is safe and will be processed automatically'
+            };
           } else {
             console.error('❌ Failed to buffer submission:', bufferResult.error);
             throw new Error(`API limit reached and failed to buffer submission: ${bufferResult.error}`);

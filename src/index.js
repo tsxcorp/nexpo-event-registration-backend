@@ -91,6 +91,8 @@ const zohoCreatorRoutes = require('./routes/zohoCreator');     // /api/zoho-crea
 const realtimeRoutes = require('./routes/realtime');          // /api/realtime (Socket.IO + Redis)
 const eventFilteringRoutes = require('./routes/eventFiltering'); // /api/event-filtering (Client-side filtering)
 const bufferRoutes = require('./routes/buffer'); // /api/buffer (Redis Buffer Management)
+const cacheRoutes = require('./routes/cache'); // /api/cache (Redis Cache Management)
+const webhookRoutes = require('./routes/webhooks'); // /webhooks (Zoho Webhooks)
 
 app.use('/api/events', eventRoutes);
 app.use('/api/registrations', registrationRoutes);
@@ -103,6 +105,8 @@ app.use('/api/zoho-creator', zohoCreatorRoutes);
 app.use('/api/realtime', realtimeRoutes);
 app.use('/api/event-filtering', eventFilteringRoutes);
 app.use('/api/buffer', bufferRoutes);
+app.use('/api/cache', cacheRoutes);
+app.use('/webhooks', webhookRoutes);
 
 // Serve static files for widget testing
 app.use(express.static('./', { 
@@ -220,6 +224,35 @@ httpServer.listen(PORT, async () => {
     console.log(`   📦 Buffer Scheduler: ✅ Auto-retry enabled`);
   } catch (error) {
     console.log(`   📦 Buffer Scheduler: ⚠️ Auto-retry failed - ${error.message}`);
+  }
+  
+  // Initialize cache population service
+  try {
+    const redisPopulationService = require('./services/redisPopulationService');
+    
+    // Start scheduled cache refresh (every 30 minutes)
+    redisPopulationService.startScheduledRefresh(30);
+    console.log(`   🗄️ Cache Population: ✅ Scheduled refresh enabled (30min)`);
+    
+    // Initial cache population if needed
+    redisPopulationService.isCacheValid().then(isValid => {
+      if (!isValid) {
+        console.log(`   🗄️ Cache Population: 🔄 Initial population needed`);
+        // Don't block server startup, populate in background
+        setTimeout(async () => {
+          try {
+            await redisPopulationService.populateFromZoho();
+            console.log(`   🗄️ Cache Population: ✅ Initial population completed`);
+          } catch (error) {
+            console.log(`   🗄️ Cache Population: ⚠️ Initial population failed - ${error.message}`);
+          }
+        }, 5000); // Wait 5 seconds after server start
+      } else {
+        console.log(`   🗄️ Cache Population: ✅ Cache is valid`);
+      }
+    });
+  } catch (error) {
+    console.log(`   🗄️ Cache Population: ⚠️ Service failed - ${error.message}`);
   }
   
   console.log('');
