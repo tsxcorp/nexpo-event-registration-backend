@@ -278,6 +278,37 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *               matching_field:
  *                 type: boolean
  *                 description: Field có dùng để matching không
+ *               translation:
+ *                 type: object
+ *                 description: Thông tin dịch thuật cho field
+ *                 properties:
+ *                   en_sectionname:
+ *                     type: string
+ *                     description: Tên section tiếng Anh
+ *                   en_label:
+ *                     type: string
+ *                     description: Label tiếng Anh
+ *                   en_value:
+ *                     type: string
+ *                     description: Giá trị tiếng Anh (cho Select/Multi Select)
+ *                   en_placeholder:
+ *                     type: string
+ *                     description: Placeholder tiếng Anh
+ *                   en_helptext:
+ *                     type: string
+ *                     description: Help text tiếng Anh
+ *                   en_agreementcontent:
+ *                     type: string
+ *                     description: Nội dung agreement tiếng Anh
+ *                   en_agreementtitle:
+ *                     type: string
+ *                     description: Tiêu đề agreement tiếng Anh
+ *                   en_checkboxlabel:
+ *                     type: string
+ *                     description: Label checkbox tiếng Anh
+ *                   en_linktext:
+ *                     type: string
+ *                     description: Link text tiếng Anh
  *         sessions:
  *           type: array
  *           description: Danh sách các session/hội thảo trong sự kiện

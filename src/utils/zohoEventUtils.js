@@ -146,6 +146,21 @@ const fetchEventDetails = async (eventIdInput) => {
         processedField.link_url = field.link_url || "";
       }
 
+      // Thêm translation object
+      if (field.translation) {
+        processedField.translation = {
+          en_sectionname: field.translation.en_sectionname || "",
+          en_label: field.translation.en_label || "",
+          en_value: field.translation.en_value || "",
+          en_placeholder: field.translation.en_placeholder || "",
+          en_helptext: field.translation.en_helptext || "",
+          en_agreementcontent: field.translation.en_agreementcontent || "",
+          en_agreementtitle: field.translation.en_agreementtitle || "",
+          en_checkboxlabel: field.translation.en_checkboxlabel || "",
+          en_linktext: field.translation.en_linktext || ""
+        };
+      }
+
       return processedField;
     });
 
