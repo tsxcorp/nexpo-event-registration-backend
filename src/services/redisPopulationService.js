@@ -219,17 +219,38 @@ class RedisPopulationService {
   }
 
   /**
-   * Check if cache is valid
+   * Check if cache is valid (both time and data)
    */
   async isCacheValid() {
     try {
       const timestamp = await redisService.get(this.cacheKeys.cacheTimestamp);
       if (!timestamp) {
+        console.log('🔍 Cache invalid: No timestamp');
         return false;
       }
       
+      // Check time validity
       const age = Date.now() - timestamp;
-      return age < (this.cacheTTL.allRegistrations * 1000); // Convert to milliseconds
+      const timeValid = age < (this.cacheTTL.allRegistrations * 1000);
+      
+      if (!timeValid) {
+        console.log('🔍 Cache invalid: Time expired');
+        return false;
+      }
+      
+      // Check data validity - cache should have data
+      const allRecords = await redisService.get(this.cacheKeys.allRegistrations) || [];
+      const eventIndex = await redisService.get(this.cacheKeys.eventIndex) || {};
+      
+      const hasData = Array.isArray(allRecords) && allRecords.length > 0 && Object.keys(eventIndex).length > 0;
+      
+      if (!hasData) {
+        console.log('🔍 Cache invalid: No data (records:', allRecords.length, ', events:', Object.keys(eventIndex).length, ')');
+        return false;
+      }
+      
+      console.log('🔍 Cache valid: Time OK, Data OK');
+      return true;
     } catch (error) {
       console.error('❌ Cache validation error:', error);
       return false;
@@ -312,11 +333,12 @@ class RedisPopulationService {
   }
 
   /**
-   * Start scheduled cache refresh
+   * Start scheduled cache refresh with smart validation
    */
   startScheduledRefresh(intervalMinutes = 30) {
     console.log(`⏰ Starting scheduled cache refresh every ${intervalMinutes} minutes`);
     
+    // Main scheduled refresh (every 30 minutes)
     setInterval(async () => {
       try {
         console.log('🔄 Scheduled Redis cache refresh...');
@@ -325,6 +347,20 @@ class RedisPopulationService {
         console.error('❌ Scheduled refresh error:', error);
       }
     }, intervalMinutes * 60 * 1000);
+    
+    // Smart cache validation check (every 5 minutes)
+    console.log(`⏰ Starting cache validation check every 5 minutes`);
+    setInterval(async () => {
+      try {
+        const isValid = await this.isCacheValid();
+        if (!isValid) {
+          console.log('🔄 Cache invalid detected, triggering refresh...');
+          await this.populateFromZoho();
+        }
+      } catch (error) {
+        console.error('❌ Cache validation check error:', error);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
   }
 
   /**
@@ -450,7 +486,7 @@ class RedisPopulationService {
       console.log(`📥 Fetching single record: ${recordId}`);
       
       // Use Zoho Creator API to fetch single record
-      const response = await zohoCreatorAPI.getRecord('Registrations', recordId);
+      const response = await zohoCreatorAPI.getRecord('All_Registrations', recordId);
       
       if (response && response.data) {
         return response.data;

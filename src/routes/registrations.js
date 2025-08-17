@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
+const socketService = require('../services/socketService');
+const redisPopulationService = require('../services/redisPopulationService');
 
 /**
  * @swagger
@@ -157,6 +159,36 @@ router.post('/', async (req, res) => {
         error: 'Missing Zoho record ID',
         zohoResponse: result
       });
+    }
+
+    // 🚀 REAL-TIME UPDATE: Update Redis cache and notify clients
+    try {
+      console.log('🔄 Updating Redis cache with new registration...');
+      
+      // Fetch the new record from Zoho and update cache
+      const newRecord = await redisPopulationService.fetchSingleRecord(result.zoho_record_id);
+      if (newRecord) {
+        await redisPopulationService.updateSingleRecord(result.zoho_record_id, newRecord);
+      } else {
+        console.warn('⚠️ Could not fetch new record, triggering full cache refresh...');
+        await redisPopulationService.populateFromZoho();
+      }
+      
+      // Broadcast to Socket.IO clients
+      const registrationData = {
+        type: 'new_registration',
+        event_id: eventId,
+        zoho_record_id: result.zoho_record_id,
+        timestamp: new Date().toISOString(),
+        message: 'New registration received'
+      };
+      
+      socketService.pushRegistrationData(eventId, registrationData, 'new_registration');
+      
+      console.log('✅ Real-time updates sent successfully');
+    } catch (updateError) {
+      console.warn('⚠️ Real-time update failed (registration still successful):', updateError.message);
+      // Don't fail the request - registration was successful
     }
 
     res.status(200).json(result); // ✅ Trả toàn bộ object gốc luôn
