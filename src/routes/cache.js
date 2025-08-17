@@ -268,6 +268,93 @@ router.get('/events/:eventId', async (req, res) => {
 
 /**
  * @swagger
+ * /api/cache/events/{eventId}/stats:
+ *   get:
+ *     summary: Get event-specific statistics from cache
+ *     tags: [Cache Management]
+ *     parameters:
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *     responses:
+ *       200:
+ *         description: Event statistics from cache
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     total_for_event:
+ *                       type: integer
+ *                     checked_in:
+ *                       type: integer
+ *                     not_yet:
+ *                       type: integer
+ *                     group_registrations:
+ *                       type: integer
+ *                     group_quantity:
+ *                       type: integer
+ *                 metadata:
+ *                   type: object
+ */
+router.get('/events/:eventId/stats', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    
+    console.log(`📊 Getting stats for event: ${eventId}`);
+    
+    // Get event registrations from cache with no limit to get full stats
+    const result = await redisPopulationService.getEventRegistrations(eventId, { 
+      status: 'all',
+      group_only: false,
+      limit: 999999 // No limit for stats calculation
+    });
+    
+    if (result.success) {
+      // Extract just the stats part for the response
+      const statsResponse = {
+        success: true,
+        stats: result.stats,
+        metadata: {
+          method: result.metadata?.method || 'redis_cache',
+          cached: result.metadata?.cached || true,
+          source: result.metadata?.source || 'redis',
+          event_id: eventId,
+          timestamp: new Date().toISOString()
+        }
+      };
+      
+      console.log(`✅ Event ${eventId} stats: ${result.stats.total_for_event} total, ${result.stats.checked_in} checked in`);
+      res.json(statsResponse);
+    } else {
+      console.log(`❌ Failed to get stats for event ${eventId}`);
+      res.status(404).json({
+        success: false,
+        error: 'Failed to get event statistics',
+        event_id: eventId
+      });
+    }
+    
+  } catch (error) {
+    console.error('❌ Get event stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get event statistics',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/cache/zoho-change:
  *   post:
  *     summary: Handle Zoho data changes (edit/delete)
