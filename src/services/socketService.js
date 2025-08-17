@@ -317,7 +317,9 @@ class SocketService {
       type: 'checkin_update',
       event_id: eventId,
       registration_id: registrationId,
+      visitor_id: registrationId, // ✅ ADD: Widget expects visitor_id 
       new_status: newStatus,
+      checked_in: newStatus === true || newStatus === 'Checked In', // ✅ ADD: Widget expects boolean checked_in
       registration: registrationData,
       timestamp: new Date().toISOString()
     };

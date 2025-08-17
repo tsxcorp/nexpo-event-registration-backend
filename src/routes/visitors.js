@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtils');
+const socketService = require('../services/socketService');
+const redisPopulationService = require('../services/redisPopulationService');
 
 /**
  * @swagger
@@ -380,6 +382,43 @@ router.post('/checkin', async (req, res) => {
         details: result.details,
         error: result.error
       });
+    }
+    
+    // 🚀 REAL-TIME UPDATE: Update Redis cache and notify clients for check-in
+    try {
+      console.log('🎫 Updating Redis cache with check-in status...');
+      
+      // Get visitor registration ID and event ID
+      const registrationId = visitor.id;
+      const eventId = visitor.event_id || visitor.Event_Info?.ID;
+      
+      if (registrationId && eventId) {
+        // Fetch updated record from Zoho and update cache
+        const updatedRecord = await redisPopulationService.fetchSingleRecord(registrationId);
+        if (updatedRecord) {
+          await redisPopulationService.updateSingleRecord(registrationId, updatedRecord);
+        }
+        
+        // Broadcast check-in update to Socket.IO clients
+        const checkInData = {
+          type: 'check_in',
+          event_id: eventId,
+          registration_id: registrationId,
+          visitor_name: visitor.name || visitor.Full_Name,
+          check_in_status: 'Checked In',
+          timestamp: new Date().toISOString(),
+          message: 'Visitor checked in successfully'
+        };
+        
+        socketService.pushCheckInUpdate(eventId, registrationId, true, checkInData);
+        
+        console.log('✅ Real-time check-in updates sent successfully');
+      } else {
+        console.warn('⚠️ Missing registration ID or event ID for real-time update');
+      }
+    } catch (updateError) {
+      console.warn('⚠️ Real-time check-in update failed (check-in still successful):', updateError.message);
+      // Don't fail the request - check-in was successful
     }
     
     res.status(200).json(result);
