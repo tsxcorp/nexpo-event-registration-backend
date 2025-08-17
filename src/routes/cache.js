@@ -168,9 +168,9 @@ router.get('/events/:eventId', async (req, res) => {
     // Try to get from cache first
     let result = await redisPopulationService.getEventRegistrations(eventId, filters);
     
-    // If cache is empty, fallback to direct Zoho API
-    if (!result.data || result.data.length === 0 || result.count === 0) {
-      console.log(`🔄 Cache empty for event ${eventId}, falling back to Zoho API`);
+    // If cache is truly empty (not just 0 records for event), fallback to direct Zoho API
+    if (!result.success || result.metadata?.method !== 'redis_cache') {
+      console.log(`🔄 Cache invalid/empty for event ${eventId}, falling back to Zoho API`);
       
       try {
         const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
@@ -245,6 +245,13 @@ router.get('/events/:eventId', async (req, res) => {
             error: fallbackError.message
           }
         };
+      }
+    } else {
+      // Cache hit - even if 0 records, this is valid
+      if (result.count === 0) {
+        console.log(`✅ Cache hit for event ${eventId}: 0 registrations (valid empty event)`);
+      } else {
+        console.log(`✅ Cache hit for event ${eventId}: ${result.count} registrations`);
       }
     }
     
