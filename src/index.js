@@ -93,6 +93,8 @@ const eventFilteringRoutes = require('./routes/eventFiltering'); // /api/event-f
 const bufferRoutes = require('./routes/buffer'); // /api/buffer (Redis Buffer Management)
 const cacheRoutes = require('./routes/cache'); // /api/cache (Redis Cache Management)
 const webhookRoutes = require('./routes/webhooks'); // /webhooks (Zoho Webhooks)
+const zohoCrudRoutes = require('./routes/zohoCrud'); // /api/zoho-crud (CRUD Operations)
+const syncRoutes = require('./routes/sync'); // /api/sync (Sync Management)
 
 app.use('/api/events', eventRoutes);
 app.use('/api/registrations', registrationRoutes);
@@ -107,6 +109,8 @@ app.use('/api/event-filtering', eventFilteringRoutes);
 app.use('/api/buffer', bufferRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/webhooks', webhookRoutes);
+app.use('/api/zoho-crud', zohoCrudRoutes);
+app.use('/api/sync', syncRoutes);
 
 // Serve static files for widget testing
 app.use(express.static('./', { 
@@ -253,6 +257,27 @@ httpServer.listen(PORT, async () => {
     });
   } catch (error) {
     console.log(`   🗄️ Cache Population: ⚠️ Service failed - ${error.message}`);
+  }
+  
+  // Initialize Zoho Sync Service for real-time updates
+  try {
+    const zohoSyncService = require('./services/zohoSyncService');
+    
+    // Auto-start real-time sync if Redis is available
+    if (redisService.isReady()) {
+      setTimeout(async () => {
+        try {
+          await zohoSyncService.startRealTimeSync();
+          console.log(`   🔄 Zoho Sync Service: ✅ Real-time sync started`);
+        } catch (error) {
+          console.log(`   🔄 Zoho Sync Service: ⚠️ Real-time sync failed - ${error.message}`);
+        }
+      }, 10000); // Wait 10 seconds after server start
+    } else {
+      console.log(`   🔄 Zoho Sync Service: ⚠️ Disabled (Redis not available)`);
+    }
+  } catch (error) {
+    console.log(`   🔄 Zoho Sync Service: ⚠️ Service failed - ${error.message}`);
   }
   
   console.log('');

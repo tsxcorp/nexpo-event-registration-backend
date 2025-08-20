@@ -1,6 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const redisPopulationService = require('../services/redisPopulationService');
+const socketService = require('../services/socketService');
+
+// Cache miss protection - prevent infinite loops
+const cacheMissProtection = {
+  counters: new Map(), // Track cache miss count per event
+  cooldowns: new Map(), // Track cooldown periods per event
+  maxMisses: 2, // Maximum consecutive cache misses before cooldown
+  cooldownMs: 30000, // 30 seconds cooldown
+  lastFallback: new Map() // Track last fallback time per event
+};
 
 /**
  * @swagger
@@ -127,6 +137,44 @@ router.post('/clear', async (req, res) => {
 
 /**
  * @swagger
+ * /api/cache/reset-protection:
+ *   post:
+ *     summary: Reset cache miss protection
+ *     tags: [Cache Management]
+ *     responses:
+ *       200:
+ *         description: Cache miss protection reset successfully
+ */
+router.post('/reset-protection', async (req, res) => {
+  try {
+    console.log('🔄 Manual cache miss protection reset requested');
+    
+    // Clear all protection data
+    cacheMissProtection.counters.clear();
+    cacheMissProtection.cooldowns.clear();
+    cacheMissProtection.lastFallback.clear();
+    
+    res.json({
+      success: true,
+      message: 'Cache miss protection reset successfully',
+      result: {
+        counters_cleared: true,
+        cooldowns_cleared: true,
+        last_fallback_cleared: true
+      }
+    });
+  } catch (error) {
+    console.error('❌ Cache protection reset error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset cache protection',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/cache/events/{eventId}:
  *   get:
  *     summary: Get event registrations from cache
@@ -165,14 +213,94 @@ router.get('/events/:eventId', async (req, res) => {
       limit: limit || 5000
     };
     
+    // Check cache miss protection
+    const now = Date.now();
+    const eventKey = `${eventId}_${JSON.stringify(filters)}`;
+    
+    // Check if in cooldown
+    const cooldownUntil = cacheMissProtection.cooldowns.get(eventKey);
+    if (cooldownUntil && now < cooldownUntil) {
+      console.log(`⏳ Cache miss cooldown active for event ${eventId}, returning empty result`);
+      return res.json({
+        success: true,
+        data: [],
+        count: 0,
+        stats: { total_for_event: 0, checked_in: 0, not_yet: 0, group_registrations: 0 },
+        metadata: { 
+          method: 'cooldown_protection', 
+          cached: false,
+          source: 'protection',
+          cooldown_until: new Date(cooldownUntil).toISOString(),
+          message: 'Cache miss protection active'
+        }
+      });
+    }
+    
     // Try to get from cache first
     let result = await redisPopulationService.getEventRegistrations(eventId, filters);
     
-    // If cache is truly empty (not just 0 records for event), fallback to direct Zoho API
-    if (!result.success || result.metadata?.method !== 'redis_cache') {
-      console.log(`🔄 Cache invalid/empty for event ${eventId}, falling back to Zoho API`);
+    // Check if cache miss
+    const isCacheMiss = !result.success || result.metadata?.method !== 'redis_cache';
+    
+    if (isCacheMiss) {
+      // Increment cache miss counter
+      const currentCount = cacheMissProtection.counters.get(eventKey) || 0;
+      const newCount = currentCount + 1;
+      cacheMissProtection.counters.set(eventKey, newCount);
+      
+      console.log(`⚠️ Cache miss #${newCount} for event ${eventId}`);
+      
+      // Check if we should trigger cooldown
+      if (newCount >= cacheMissProtection.maxMisses) {
+        const cooldownEnd = now + cacheMissProtection.cooldownMs;
+        cacheMissProtection.cooldowns.set(eventKey, cooldownEnd);
+        cacheMissProtection.counters.set(eventKey, 0); // Reset counter
+        
+        console.log(`🛡️ Cache miss protection triggered for event ${eventId}, cooldown until ${new Date(cooldownEnd).toISOString()}`);
+        
+        return res.json({
+          success: true,
+          data: [],
+          count: 0,
+          stats: { total_for_event: 0, checked_in: 0, not_yet: 0, group_registrations: 0 },
+          metadata: { 
+            method: 'cache_miss_protection', 
+            cached: false,
+            source: 'protection',
+            cooldown_until: new Date(cooldownEnd).toISOString(),
+            message: 'Cache miss protection triggered'
+          }
+        });
+      }
+      
+      // Check if we should skip fallback (rate limiting)
+      const lastFallback = cacheMissProtection.lastFallback.get(eventKey) || 0;
+      const timeSinceLastFallback = now - lastFallback;
+      const minFallbackInterval = 10000; // 10 seconds between fallbacks
+      
+      if (timeSinceLastFallback < minFallbackInterval) {
+        console.log(`⏳ Rate limiting fallback for event ${eventId}, last fallback was ${Math.round(timeSinceLastFallback/1000)}s ago`);
+        return res.json({
+          success: true,
+          data: [],
+          count: 0,
+          stats: { total_for_event: 0, checked_in: 0, not_yet: 0, group_registrations: 0 },
+          metadata: { 
+            method: 'rate_limited', 
+            cached: false,
+            source: 'protection',
+            last_fallback: new Date(lastFallback).toISOString(),
+            message: 'Fallback rate limited'
+          }
+        });
+      }
+      
+      console.log(`🔄 Cache invalid/empty for event ${eventId}, falling back to Zoho API (miss #${newCount})`);
       
       try {
+        // Update last fallback time
+        cacheMissProtection.lastFallback.set(eventKey, now);
+        
         const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
         const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
           max_records: 1000,
@@ -226,7 +354,8 @@ router.get('/events/:eventId', async (req, res) => {
             method: 'zoho_api_fallback', 
             cached: false,
             source: 'zoho',
-            filtered_at: new Date().toISOString()
+            filtered_at: new Date().toISOString(),
+            cache_miss_count: newCount
           }
         };
         
@@ -242,11 +371,15 @@ router.get('/events/:eventId', async (req, res) => {
             method: 'fallback_failed', 
             cached: false,
             source: 'none',
-            error: fallbackError.message
+            error: fallbackError.message,
+            cache_miss_count: newCount
           }
         };
       }
     } else {
+      // Cache hit - reset counter
+      cacheMissProtection.counters.set(eventKey, 0);
+      
       // Cache hit - even if 0 records, this is valid
       if (result.count === 0) {
         console.log(`✅ Cache hit for event ${eventId}: 0 registrations (valid empty event)`);
