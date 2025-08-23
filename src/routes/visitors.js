@@ -366,8 +366,26 @@ router.post('/checkin', async (req, res) => {
   }
 
   try {
+    console.log("🔄 Starting check-in process for visitor:", visitor.id);
+    const startTime = Date.now();
+    
     const result = await submitCheckin({ visitor });
-    console.log("✅ Check-in result for visitor:", visitor.id, result);
+    
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+    console.log("✅ Check-in completed in", duration, "ms for visitor:", visitor.id, result);
+    
+    // Handle error response (configuration or Zoho API issues)
+    if (!result.success) {
+      console.error("❌ Check-in failed:", result.error);
+      console.error("❌ Details:", result.details);
+      
+      return res.status(500).json({
+        success: false,
+        error: result.error,
+        details: result.details
+      });
+    }
     
     // Handle warning response (Zoho Custom Function failed but process continued)
     if (result.warning) {
@@ -382,43 +400,6 @@ router.post('/checkin', async (req, res) => {
         details: result.details,
         error: result.error
       });
-    }
-    
-    // 🚀 REAL-TIME UPDATE: Update Redis cache and notify clients for check-in
-    try {
-      console.log('🎫 Updating Redis cache with check-in status...');
-      
-      // Get visitor registration ID and event ID
-      const registrationId = visitor.id;
-      const eventId = visitor.event_id || visitor.Event_Info?.ID;
-      
-      if (registrationId && eventId) {
-        // Fetch updated record from Zoho and update cache
-        const updatedRecord = await redisPopulationService.fetchSingleRecord(registrationId);
-        if (updatedRecord) {
-          await redisPopulationService.updateSingleRecord(registrationId, updatedRecord);
-        }
-        
-        // Broadcast check-in update to Socket.IO clients
-        const checkInData = {
-          type: 'check_in',
-          event_id: eventId,
-          registration_id: registrationId,
-          visitor_name: visitor.name || visitor.Full_Name,
-          check_in_status: 'Checked In',
-          timestamp: new Date().toISOString(),
-          message: 'Visitor checked in successfully'
-        };
-        
-        socketService.pushCheckInUpdate(eventId, registrationId, true, checkInData);
-        
-        console.log('✅ Real-time check-in updates sent successfully');
-      } else {
-        console.warn('⚠️ Missing registration ID or event ID for real-time update');
-      }
-    } catch (updateError) {
-      console.warn('⚠️ Real-time check-in update failed (check-in still successful):', updateError.message);
-      // Don't fail the request - check-in was successful
     }
     
     res.status(200).json(result);

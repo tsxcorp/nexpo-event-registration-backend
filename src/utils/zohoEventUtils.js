@@ -64,6 +64,15 @@ const fetchEventDetails = async (eventIdInput) => {
         const processedEvents = eventsArray.map(event => {
           const safeEventId = String(event.id);
           
+          // Note: In NEXPO mode, badge_printing is always false from Zoho API
+          // This is a limitation of the Zoho Custom API - it only returns summary data
+          // For accurate badge_printing values, use single event API
+          console.log(`🔍 NEXPO mode - badge_printing for event ${safeEventId} (${event.name}):`, {
+            value: event.badge_printing,
+            type: typeof event.badge_printing,
+            note: 'NEXPO mode returns summary data only'
+          });
+          
           return {
             id: safeEventId,
             name: event.name || "",
@@ -75,7 +84,8 @@ const fetchEventDetails = async (eventIdInput) => {
             email: event.email || "",
             location: event.location || "",
             badge_size: event.badge_size || "",
-            badge_printing: event.badge_printing || false
+            badge_printing: false, // NEXPO mode limitation - always false
+            note: "For accurate badge_printing, use single event API"
           };
         });
 

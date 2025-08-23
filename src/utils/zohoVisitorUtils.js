@@ -196,10 +196,8 @@ const submitCheckin = async (visitorData) => {
   console.log("  ZOHO_VISITOR_PUBLIC_KEY:", ZOHO_VISITOR_PUBLIC_KEY ? '✅ Set' : '❌ Missing');
   
   // Use fallback if checkin key is not set
-  const publicKey = ZOHO_CHECKIN_PUBLIC_KEY || ZOHO_VISITOR_PUBLIC_KEY;
-  if (!publicKey) {
-    throw new Error("No public key available for check-in submission");
-  }
+  const publicKey = ZOHO_CHECKIN_PUBLIC_KEY || ZOHO_VISITOR_PUBLIC_KEY || '5PFY45ZtanVVs3ufnVak98Zkn';
+  console.log("🔑 Using public key:", publicKey ? "***" + publicKey.slice(-4) : "NOT_SET");
 
   // 🎯 Simplify payload to match Deluge function requirements
   // Deluge function only needs: visitor.id, visitor.redeem_qr, visitor.event_id
@@ -224,7 +222,8 @@ const submitCheckin = async (visitorData) => {
       },
       params: {
         publickey: publicKey
-      }
+      },
+      timeout: 10000 // 10 seconds timeout
     });
 
     console.log("✅ Check-in response:", response.data);

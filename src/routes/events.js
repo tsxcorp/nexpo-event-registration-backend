@@ -468,9 +468,62 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
 
 router.get('/', async (req, res) => {
   const eventId = req.query.eventId;
+  const detailed = req.query.detailed === 'true';
+  
   if (!eventId) return res.status(400).json({ error: 'Missing eventId' });
 
   try {
+    // If detailed=true and eventId=NEXPO, fetch detailed info for each event
+    if (detailed && eventId === 'NEXPO') {
+      console.log("🔄 Fetching detailed events list...");
+      
+      // First get the basic list
+      const basicResult = await fetchEventDetails(eventId);
+      
+      if (basicResult.mode === 'list' && basicResult.events) {
+        // Fetch detailed info for each event
+        const detailedEvents = [];
+        
+        for (const event of basicResult.events) {
+          try {
+            console.log(`📋 Fetching detailed info for event: ${event.id}`);
+            const detailedEvent = await fetchEventDetails(event.id);
+            
+            if (detailedEvent.mode === 'single' && detailedEvent.event) {
+              detailedEvents.push({
+                id: event.id,
+                name: event.name,
+                description: event.description,
+                start_date: event.start_date,
+                end_date: event.end_date,
+                logo: event.logo,
+                banner: event.banner,
+                email: event.email,
+                location: event.location,
+                badge_size: detailedEvent.event.badge_size,
+                badge_printing: detailedEvent.event.badge_printing, // Accurate value
+                badge_custom_content: detailedEvent.event.badge_custom_content
+              });
+            } else {
+              // Fallback to basic info if detailed fetch fails
+              detailedEvents.push(event);
+            }
+          } catch (error) {
+            console.warn(`⚠️ Failed to fetch detailed info for event ${event.id}:`, error.message);
+            // Fallback to basic info
+            detailedEvents.push(event);
+          }
+        }
+        
+        return res.status(200).json({
+          events: detailedEvents,
+          total: detailedEvents.length,
+          mode: "detailed_list"
+        });
+      }
+    }
+    
+    // Default behavior
     const result = await fetchEventDetails(eventId);
     console.log("✅ Event data fetched successfully for ID:", eventId);
     
