@@ -177,151 +177,93 @@ router.post('/zoho-creator-function', async (req, res) => {
 });
 
 /**
- * Enhanced webhook change handler
- * Handles different types of changes with improved error handling
+ * Enhanced webhook change handler with better error recovery
  */
 async function handleWebhookChange(changeType, recordId, eventId, data, reportName) {
   try {
-    console.log(`🔄 Handling webhook change: ${changeType}`, { recordId, eventId, reportName });
+    console.log(`🔄 Processing webhook change: ${changeType} for record ${recordId}`);
+    
+    let result = { success: false, method: 'webhook', changeType };
     
     switch (changeType) {
       case 'create':
-        return await handleRecordCreate(recordId, eventId, data, reportName);
+        // New record created - add to cache
+        if (recordId) {
+          const newRecord = await redisPopulationService.fetchSingleRecord(recordId);
+          if (newRecord) {
+            await redisPopulationService.updateSingleRecord(recordId, newRecord);
+            result.success = true;
+            result.action = 'record_added';
+            console.log(`✅ New record ${recordId} added to cache via webhook`);
+          }
+        }
+        break;
+        
       case 'edit':
-        return await handleRecordEdit(recordId, eventId, data, reportName);
+        // Record updated - update in cache
+        if (recordId) {
+          const updatedRecord = await redisPopulationService.fetchSingleRecord(recordId);
+          if (updatedRecord) {
+            await redisPopulationService.updateSingleRecord(recordId, updatedRecord);
+            result.success = true;
+            result.action = 'record_updated';
+            console.log(`✅ Record ${recordId} updated in cache via webhook`);
+          }
+        }
+        break;
+        
       case 'delete':
-        return await handleRecordDelete(recordId, eventId, reportName);
+        // Record deleted - remove from cache
+        if (recordId) {
+          await redisPopulationService.handleRecordDelete(recordId, eventId);
+          result.success = true;
+          result.action = 'record_deleted';
+          console.log(`✅ Record ${recordId} removed from cache via webhook`);
+        }
+        break;
+        
       case 'bulk_change':
-        return await handleBulkChange(reportName);
+        // Bulk operation - trigger lightweight sync instead of full refresh
+        console.log('🔄 Bulk change detected, performing lightweight sync...');
+        const syncResult = await redisPopulationService.lightweightSync();
+        result.success = syncResult.success;
+        result.action = 'bulk_sync';
+        result.sync_method = syncResult.method;
+        console.log(`✅ Bulk change handled via ${syncResult.method}`);
+        break;
+        
       default:
-        console.log(`⚠️ Unknown change type: ${changeType}, falling back to bulk change`);
-        return await handleBulkChange(reportName);
-    }
-  } catch (error) {
-    console.error(`❌ Error handling webhook change:`, error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Handle record creation
- */
-async function handleRecordCreate(recordId, eventId, data, reportName) {
-  try {
-    console.log(`✨ Handling record creation: ${recordId}`);
-    
-    // If we have the data in webhook, use it. Otherwise fetch from Zoho
-    let newRecord = data;
-    if (!newRecord && recordId) {
-      const fetchResult = await redisPopulationService.fetchSingleRecord(recordId);
-      newRecord = fetchResult;
+        console.log(`⚠️ Unknown change type: ${changeType}`);
+        result.success = false;
+        result.error = `Unknown change type: ${changeType}`;
     }
     
-    if (newRecord) {
-      await redisPopulationService.updateCache(newRecord);
-      
-      // Broadcast real-time update
-      await socketService.broadcastToAll('record_created', {
-        record_id: recordId,
-        event_id: eventId,
-        data: newRecord,
-        timestamp: new Date().toISOString()
-      });
-      
-      console.log(`✅ Record creation handled: ${recordId}`);
-      return { success: true, action: 'created', recordId };
-    } else {
-      console.log(`⚠️ No data found for created record: ${recordId}`);
-      return { success: false, error: 'Record data not found' };
-    }
-  } catch (error) {
-    console.error(`❌ Error handling record creation:`, error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Handle record edit
- */
-async function handleRecordEdit(recordId, eventId, data, reportName) {
-  try {
-    console.log(`📝 Handling record edit: ${recordId}`);
-    
-    // Use webhook data if available, otherwise fetch from Zoho
-    let updatedRecord = data;
-    if (!updatedRecord && recordId) {
-      updatedRecord = await redisPopulationService.fetchSingleRecord(recordId);
+    // Broadcast real-time update if successful
+    if (result.success && eventId) {
+      try {
+        await socketService.pushRegistrationData(eventId, {
+          type: 'webhook_update',
+          change_type: changeType,
+          record_id: recordId,
+          timestamp: new Date().toISOString()
+        }, 'webhook_update');
+        console.log(`📡 Real-time update broadcasted for event ${eventId}`);
+      } catch (broadcastError) {
+        console.warn('⚠️ Real-time broadcast failed:', broadcastError.message);
+        // Don't fail the webhook for broadcast errors
+      }
     }
     
-    if (updatedRecord) {
-      await redisPopulationService.updateSingleRecord(recordId, updatedRecord);
-      
-      // Broadcast real-time update
-      await socketService.broadcastToAll('record_updated', {
-        record_id: recordId,
-        event_id: eventId,
-        data: updatedRecord,
-        timestamp: new Date().toISOString()
-      });
-      
-      console.log(`✅ Record edit handled: ${recordId}`);
-      return { success: true, action: 'updated', recordId };
-    } else {
-      console.log(`⚠️ Record not found, might be deleted: ${recordId}`);
-      // Handle as deletion
-      return await handleRecordDelete(recordId, eventId, reportName);
-    }
+    return result;
+    
   } catch (error) {
-    console.error(`❌ Error handling record edit:`, error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Handle record deletion
- */
-async function handleRecordDelete(recordId, eventId, reportName) {
-  try {
-    console.log(`🗑️ Handling record deletion: ${recordId}`);
-    
-    await redisPopulationService.handleRecordDelete(recordId, eventId);
-    
-    // Broadcast real-time update
-    await socketService.broadcastToAll('record_deleted', {
-      record_id: recordId,
-      event_id: eventId,
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log(`✅ Record deletion handled: ${recordId}`);
-    return { success: true, action: 'deleted', recordId };
-  } catch (error) {
-    console.error(`❌ Error handling record deletion:`, error);
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Handle bulk changes
- */
-async function handleBulkChange(reportName) {
-  try {
-    console.log(`🔄 Handling bulk change for: ${reportName}`);
-    
-    const result = await redisPopulationService.populateFromZoho();
-    
-    // Broadcast bulk update
-    await socketService.broadcastToAll('bulk_update', {
-      report_name: reportName,
-      result,
-      timestamp: new Date().toISOString()
-    });
-    
-    console.log(`✅ Bulk change handled for: ${reportName}`);
-    return { success: true, action: 'bulk_update', result };
-  } catch (error) {
-    console.error(`❌ Error handling bulk change:`, error);
-    return { success: false, error: error.message };
+    console.error('❌ Webhook change handler error:', error);
+    return {
+      success: false,
+      method: 'webhook',
+      changeType,
+      error: error.message
+    };
   }
 }
 

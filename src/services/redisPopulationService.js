@@ -35,7 +35,7 @@ class RedisPopulationService {
   }
 
   /**
-   * Populate Redis cache from Zoho Creator API
+   * Populate Redis cache from Zoho API
    */
   async populateFromZoho() {
     try {
@@ -185,7 +185,7 @@ class RedisPopulationService {
       }
       
       // Apply limit
-      const limit = parseInt(filters.limit) || 5000;
+      const limit = parseInt(filters.limit) || 10000;
       const limitedResults = filteredData.slice(0, limit);
       
       // Calculate statistics
@@ -336,31 +336,177 @@ class RedisPopulationService {
    * Start scheduled cache refresh with smart validation
    */
   startScheduledRefresh(intervalMinutes = 30) {
-    console.log(`⏰ Starting scheduled cache refresh every ${intervalMinutes} minutes`);
+    console.log(`⏰ Starting lightweight health check every ${intervalMinutes} minutes`);
     
-    // Main scheduled refresh (every 30 minutes)
+    // Lightweight health check (thay vì full refresh)
     setInterval(async () => {
       try {
-        console.log('🔄 Scheduled Redis cache refresh...');
-        await this.populateFromZoho();
+        console.log('🔍 Performing cache health check...');
+        const isHealthy = await this.checkCacheHealth();
+        
+        if (!isHealthy) {
+          console.log('⚠️ Cache health check failed, triggering recovery...');
+          await this.handleCacheFailure();
+        } else {
+          console.log('✅ Cache health check passed');
+        }
       } catch (error) {
-        console.error('❌ Scheduled refresh error:', error);
+        console.error('❌ Cache health check error:', error);
       }
     }, intervalMinutes * 60 * 1000);
     
-    // Smart cache validation check (every 5 minutes)
-    console.log(`⏰ Starting cache validation check every 5 minutes`);
-    setInterval(async () => {
-      try {
-        const isValid = await this.isCacheValid();
-        if (!isValid) {
-          console.log('🔄 Cache invalid detected, triggering refresh...');
-          await this.populateFromZoho();
-        }
-      } catch (error) {
-        console.error('❌ Cache validation check error:', error);
+    // Remove the aggressive 5-minute validation check
+    console.log('✅ Removed aggressive cache validation - using webhook-based updates instead');
+  }
+
+  /**
+   * Lightweight cache health check
+   */
+  async checkCacheHealth() {
+    try {
+      // 1. Check Redis connection
+      if (!redisService.isReady()) {
+        console.log('❌ Redis not ready');
+        return false;
       }
-    }, 5 * 60 * 1000); // 5 minutes
+      
+      // 2. Check cache structure exists
+      const hasData = await redisService.exists(this.cacheKeys.allRegistrations);
+      const hasIndex = await redisService.exists(this.cacheKeys.eventIndex);
+      
+      if (!hasData || !hasIndex) {
+        console.log('❌ Cache structure missing');
+        return false;
+      }
+      
+      // 3. Optional: Lightweight count check (allow small difference)
+      try {
+        const recordCount = await this.getZohoRecordCount();
+        const allRecords = await redisService.get(this.cacheKeys.allRegistrations) || [];
+        const cacheCount = allRecords.length;
+        
+        const difference = Math.abs(recordCount - cacheCount);
+        const isCountValid = difference < 10; // Allow 10 records difference
+        
+        if (!isCountValid) {
+          console.log(`⚠️ Count mismatch: Cache=${cacheCount}, Zoho=${recordCount}, Diff=${difference}`);
+          return false;
+        }
+      } catch (countError) {
+        console.warn('⚠️ Count check failed, continuing with structure check only:', countError.message);
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ Cache health check error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Handle cache failure with smart recovery
+   */
+  async handleCacheFailure() {
+    try {
+      console.log('🔄 Starting cache failure recovery...');
+      
+      // 1. Try webhook-based recovery first (lightweight)
+      const webhookRecovery = await this.recoverFromWebhooks();
+      if (webhookRecovery.success) {
+        console.log('✅ Cache recovered via webhook data');
+        return webhookRecovery;
+      }
+      
+      // 2. If webhook recovery failed, do lightweight sync
+      console.log('🔄 Webhook recovery failed, trying lightweight sync...');
+      const lightweightSync = await this.lightweightSync();
+      if (lightweightSync.success) {
+        console.log('✅ Cache recovered via lightweight sync');
+        return lightweightSync;
+      }
+      
+      // 3. Last resort: full refresh
+      console.log('🔄 Lightweight sync failed, performing full refresh...');
+      const fullRefresh = await this.populateFromZoho();
+      console.log('✅ Cache recovered via full refresh');
+      return fullRefresh;
+      
+    } catch (error) {
+      console.error('❌ Cache failure recovery error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Try to recover cache from webhook data
+   */
+  async recoverFromWebhooks() {
+    try {
+      // This would check if we have recent webhook data to reconstruct cache
+      // For now, return false to trigger next recovery method
+      return { success: false, method: 'webhook_recovery' };
+    } catch (error) {
+      console.error('❌ Webhook recovery error:', error);
+      return { success: false, method: 'webhook_recovery', error: error.message };
+    }
+  }
+
+  /**
+   * Lightweight sync - only fetch recent records
+   */
+  async lightweightSync() {
+    try {
+      console.log('🔄 Performing lightweight sync...');
+      
+      // Get last sync timestamp
+      const lastSync = await redisService.get(this.cacheKeys.cacheTimestamp) || 0;
+      const oneHourAgo = Date.now() - (60 * 60 * 1000);
+      
+      // Only sync if last sync was more than 1 hour ago
+      if (lastSync > oneHourAgo) {
+        console.log('✅ Cache is recent enough, skipping lightweight sync');
+        return { success: true, method: 'skip_sync' };
+      }
+      
+      // Fetch only recent records (last 24 hours)
+      const recentRecords = await zohoCreatorAPI.getReportRecords('All_Registrations', {
+        max_records: 200,
+        criteria: `(Created_Time > '${new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()}')`,
+        useCache: false
+      });
+      
+      if (recentRecords.data && recentRecords.data.length > 0) {
+        // Merge with existing cache
+        const existingRecords = await redisService.get(this.cacheKeys.allRegistrations) || [];
+        const mergedRecords = this.mergeRecords(existingRecords, recentRecords.data);
+        
+        await redisService.set(this.cacheKeys.allRegistrations, mergedRecords, this.cacheTTL.allRegistrations);
+        await redisService.set(this.cacheKeys.cacheTimestamp, Date.now(), this.cacheTTL.metadata);
+        
+        console.log(`✅ Lightweight sync completed: ${recentRecords.data.length} recent records merged`);
+        return { success: true, method: 'lightweight_sync', records_added: recentRecords.data.length };
+      }
+      
+      return { success: false, method: 'lightweight_sync', reason: 'no_recent_records' };
+      
+    } catch (error) {
+      console.error('❌ Lightweight sync error:', error);
+      return { success: false, method: 'lightweight_sync', error: error.message };
+    }
+  }
+
+  /**
+   * Merge new records with existing cache
+   */
+  mergeRecords(existingRecords, newRecords) {
+    const existingMap = new Map(existingRecords.map(record => [record.ID, record]));
+    
+    // Add/update new records
+    newRecords.forEach(record => {
+      existingMap.set(record.ID, record);
+    });
+    
+    return Array.from(existingMap.values());
   }
 
   /**

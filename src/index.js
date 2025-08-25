@@ -234,9 +234,9 @@ httpServer.listen(PORT, async () => {
   try {
     const redisPopulationService = require('./services/redisPopulationService');
     
-    // Start scheduled cache refresh (every 30 minutes)
-    redisPopulationService.startScheduledRefresh(30);
-    console.log(`   🗄️ Cache Population: ✅ Scheduled refresh enabled (30min)`);
+    // Start scheduled cache refresh (every 2 hours instead of 30 minutes)
+    redisPopulationService.startScheduledRefresh(120);
+    console.log(`   🗄️ Cache Population: ✅ Scheduled health check enabled (2h)`);
     
     // Initial cache population if needed
     redisPopulationService.isCacheValid().then(isValid => {

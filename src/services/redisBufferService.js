@@ -326,11 +326,21 @@ class RedisBufferService {
 
   /**
    * Set API limit reset time
-   * @param {Date} resetTime - When API limit resets
+   * @param {Date|null} resetTime - When API limit resets, or null to clear
    */
   async setLimitResetTime(resetTime) {
     try {
-      await redisService.set(this.limitResetKey, resetTime.toISOString(), 24 * 60 * 60); // 24 hours TTL
+      if (resetTime === null) {
+        // Clear the limit reset time
+        await redisService.del(this.limitResetKey);
+        console.log('✅ API limit reset time cleared');
+      } else if (resetTime instanceof Date) {
+        // Set the limit reset time
+        await redisService.set(this.limitResetKey, resetTime.toISOString(), 24 * 60 * 60); // 24 hours TTL
+        console.log(`✅ API limit reset time set to: ${resetTime.toISOString()}`);
+      } else {
+        console.warn('⚠️ Invalid resetTime provided to setLimitResetTime:', resetTime);
+      }
     } catch (error) {
       console.error('❌ Error setting limit reset time:', error);
     }

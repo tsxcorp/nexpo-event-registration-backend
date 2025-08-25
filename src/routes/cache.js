@@ -210,7 +210,7 @@ router.get('/events/:eventId', async (req, res) => {
     const filters = {
       status: status || 'all',
       group_only: group_only || false,
-      limit: limit || 5000
+      limit: limit || 10000
     };
     
     // Check cache miss protection
@@ -601,6 +601,51 @@ router.post('/force-refresh', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to force refresh cache',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/cache/health-check:
+ *   post:
+ *     summary: Manual cache health check
+ *     tags: [Cache Management]
+ *     responses:
+ *       200:
+ *         description: Health check completed
+ */
+router.post('/health-check', async (req, res) => {
+  try {
+    console.log('🔍 Manual cache health check requested');
+    
+    const isHealthy = await redisPopulationService.checkCacheHealth();
+    
+    if (isHealthy) {
+      res.json({
+        success: true,
+        message: 'Cache is healthy',
+        status: 'healthy',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      console.log('⚠️ Manual health check failed, triggering recovery...');
+      const recovery = await redisPopulationService.handleCacheFailure();
+      
+      res.json({
+        success: true,
+        message: 'Cache recovered',
+        status: 'recovered',
+        recovery_method: recovery.method,
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('❌ Manual health check error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Health check failed',
       details: error.message
     });
   }

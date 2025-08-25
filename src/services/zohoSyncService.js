@@ -14,15 +14,15 @@ class ZohoSyncService {
     this.lastSyncTimestamps = new Map();
     this.syncLocks = new Map();
     
-    // Configuration
+    // Configuration - Tối ưu intervals
     this.config = {
-      // Sync intervals (in minutes)
-      fastSync: 5,        // For high-priority events
-      normalSync: 15,     // For normal events
-      slowSync: 60,       // For low-priority events
+      // Sync intervals (in minutes) - Tăng lên để giảm API calls
+      fastSync: 30,       // For high-priority events (từ 5 → 30)
+      normalSync: 60,     // For normal events (từ 15 → 60)
+      slowSync: 120,      // For low-priority events (từ 60 → 120)
       
-      // Change detection
-      changeDetectionInterval: 2, // Check for changes every 2 minutes
+      // Change detection - Tăng lên để giảm checks
+      changeDetectionInterval: 15, // Check for changes every 15 minutes (từ 2 → 15)
       
       // Batch processing
       batchSize: 50,
@@ -36,7 +36,7 @@ class ZohoSyncService {
       syncMetadataTTL: 24 * 60 * 60, // 24 hours
     };
     
-    console.log('🔄 Zoho Sync Service initialized');
+    console.log('🔄 Zoho Sync Service initialized with optimized intervals');
   }
 
   /**
@@ -349,7 +349,7 @@ class ZohoSyncService {
       // Get event data from Zoho
       const eventData = await zohoCreatorAPI.getReportRecords('All_Registrations', {
         criteria: `Event_Info.ID == "${eventId}"`,
-        max_records: 5000
+        max_records: 10000
       });
       
       if (eventData.success && eventData.data) {
