@@ -127,7 +127,7 @@ class ZohoCreatorAPI {
     if (fetchAll) {
       console.log(`🔄 Fetching ALL records from ${reportLinkName}...`);
       
-      while (hasMore && totalFetched < 10000) { // Safety limit
+      while (hasMore && totalFetched < 200000) { // Very high safety limit for extremely large datasets
         try {
           // Build direct axios config to properly capture response headers
           const config = {
@@ -156,7 +156,7 @@ class ZohoCreatorAPI {
             
             // Check for next cursor in response headers
             currentCursor = response.headers?.record_cursor || response.headers?.['record_cursor'];
-            hasMore = !!currentCursor && response.data.data.length >= max_records;
+            hasMore = !!currentCursor; // Continue as long as there's a cursor, regardless of batch size
             
             if (currentCursor) {
               console.log(`🔄 Next cursor found: ${currentCursor.substring(0, 20)}..., continuing`);

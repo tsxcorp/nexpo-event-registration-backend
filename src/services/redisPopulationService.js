@@ -43,7 +43,7 @@ class RedisPopulationService {
       
       // Fetch ALL data từ Zoho (1 lần duy nhất)
       const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
-        max_records: 1000,
+        max_records: 1000, // Zoho API v2.1 only accepts 200, 500, 1000
         fetchAll: true,
         useCache: false
       });
