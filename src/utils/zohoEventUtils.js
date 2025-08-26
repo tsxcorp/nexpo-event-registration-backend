@@ -85,6 +85,7 @@ const fetchEventDetails = async (eventIdInput) => {
             location: event.location || "",
             badge_size: event.badge_size || "",
             badge_printing: false, // NEXPO mode limitation - always false
+            ticket_mode: event.ticket_mode || false,
             note: "For accurate badge_printing, use single event API"
           };
         });
@@ -276,6 +277,7 @@ const fetchEventDetails = async (eventIdInput) => {
         badge_size: eventData.badge_size || "",
         badge_custom_content: eventData.badge_custom_content || {},
         badge_printing: eventData.badge_printing || false,
+        ticket_mode: eventData.ticket_mode || false,
         formFields: enrichedFields,
         exhibitors: processedExhibitors,
         sessions: processedSessions,

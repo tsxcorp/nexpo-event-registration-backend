@@ -136,6 +136,9 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *         badge_printing:
  *           type: boolean
  *           description: Có in badge không
+ *         ticket_mode:
+ *           type: boolean
+ *           description: Chế độ ticket
  *     
  *     EventDetail:
  *       type: object
@@ -190,6 +193,10 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *           type: boolean
  *           description: Xác định xem event có in badge hay không
  *           example: true
+ *         ticket_mode:
+ *           type: boolean
+ *           description: Chế độ ticket của event
+ *           example: false
  *         logo:
  *           type: string
  *           description: URL logo của sự kiện
@@ -502,6 +509,7 @@ router.get('/', async (req, res) => {
                 location: event.location,
                 badge_size: detailedEvent.event.badge_size,
                 badge_printing: detailedEvent.event.badge_printing, // Accurate value
+                ticket_mode: detailedEvent.event.ticket_mode,
                 badge_custom_content: detailedEvent.event.badge_custom_content
               });
             } else {
