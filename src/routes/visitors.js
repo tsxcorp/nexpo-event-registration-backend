@@ -3,6 +3,7 @@ const router = express.Router();
 const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtils');
 const socketService = require('../services/socketService');
 const redisPopulationService = require('../services/redisPopulationService');
+const axios = require('axios');
 
 /**
  * @swagger
@@ -206,17 +207,147 @@ const redisPopulationService = require('../services/redisPopulationService');
  *                   description: Chi tiết lỗi
  */
 
+// 🚀 Fetch group visitors from custom Zoho API
+const fetchGroupVisitors = async (groupId) => {
+  const apiUrl = 'https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors';
+  const publicKey = 'yNCkueSrUthmff4ZKzKUAwjJu';
+  
+  try {
+    console.log("🔍 Fetching group visitors from:", apiUrl);
+    console.log("📋 Parameters:", {
+      visid: groupId,
+      publickey: publicKey ? "***" + publicKey.slice(-4) : "NOT_SET"
+    });
+
+    const response = await axios.get(apiUrl, {
+      headers: { Accept: 'application/json' },
+      params: {
+        visid: groupId,
+        publickey: publicKey
+      },
+      timeout: 30000,
+      responseType: 'text' // 🛑 tránh mất số khi parse
+    });
+
+    console.log("📤 Raw Zoho response:", response.data);
+
+    const data = JSON.parse(response.data, (key, value) => {
+      if (key === 'id' && typeof value === 'number') {
+        return value.toString();
+      }
+      return value;
+    });
+
+    console.log("📊 Parsed Zoho data:", JSON.stringify(data, null, 2));
+
+    // Check if API returned error
+    if (data?.code && data.code !== 3000) {
+      console.error("❌ Zoho API returned error code:", data?.code);
+      throw new Error(`Zoho API error: ${data?.message || 'Unknown error'} (Code: ${data?.code})`);
+    }
+
+    // Return array of visitors
+    let visitors = [];
+    if (Array.isArray(data)) {
+      visitors = data;
+    } else if (data?.result && Array.isArray(data.result)) {
+      visitors = data.result;
+    } else if (data?.result && !Array.isArray(data.result)) {
+      // If result is not an array, try to parse it
+      try {
+        visitors = JSON.parse(data.result);
+      } catch (e) {
+        visitors = [data.result];
+      }
+    }
+    
+    console.log("✅ Group visitors fetched successfully:", visitors.length, "visitors");
+    console.log("📋 First visitor sample:", JSON.stringify(visitors[0], null, 2));
+    return visitors;
+
+  } catch (err) {
+    console.error("❌ Error in fetchGroupVisitors:", err.message);
+    console.error("❌ Error stack:", err.stack);
+    throw err;
+  }
+};
+
 router.get('/', async (req, res) => {
   const visitorId = req.query.visid;
   if (!visitorId) return res.status(400).json({ error: 'Missing visid' });
 
   try {
-    const result = await fetchVisitorDetails(visitorId);
-    console.log("✅ Visitor data fetched successfully for ID:", visitorId);
+    // 🔍 Check if visitorId contains "GRP" - if so, fetch group visitors
+    console.log("🔍 Checking visitorId:", visitorId, "contains GRP:", visitorId.includes('GRP'));
     
-    res.status(200).json(result);
+    if (visitorId.includes('GRP')) {
+      console.log("🔍 Detected group ID, fetching group visitors:", visitorId);
+      
+      try {
+        const groupVisitors = await fetchGroupVisitors(visitorId);
+        
+        // Transform group visitors to match single visitor format
+        const visitors = groupVisitors.map(visitorData => {
+          // Parse custom_fields_value if it's a JSON string
+          let customFields = {};
+          try {
+            if (typeof visitorData.custom_fields_value === 'string') {
+              customFields = JSON.parse(visitorData.custom_fields_value);
+            } else if (visitorData.custom_fields_value && typeof visitorData.custom_fields_value === 'object') {
+              customFields = visitorData.custom_fields_value;
+            }
+          } catch (parseError) {
+            console.warn("⚠️ Failed to parse custom_fields_value:", parseError.message);
+            customFields = visitorData.custom_fields_value || {};
+          }
+
+          return {
+            visitor: {
+              id: String(visitorData.id),
+              salutation: visitorData.salutation || "",
+              name: visitorData.full_name || visitorData.name || "",
+              email: visitorData.email || "",
+              phone: visitorData.phone_number || visitorData.phone || "",
+              company: visitorData.company || "",
+              job_title: visitorData.job_title || "",
+              registration_date: visitorData.registration_date || "",
+              status: visitorData.status || "",
+              event_id: visitorData.event_id || "",
+              event_name: visitorData.event_name || "",
+              group_id: visitorData.group_id || "",
+              group_redeem_id: visitorData.group_redeem_id || "",
+              badge_qr: visitorData.badge_qr || "",
+              redeem_qr: visitorData.redeem_qr || "",
+              redeem_id: visitorData.redeem_id || "",
+              encrypt_key: visitorData.encrypt_key || "",
+              head_mark: visitorData.head_mark || false,
+              check_in_history: visitorData.check_in_history || [],
+              matching_list: visitorData.matching_list || [],
+              custom_fields: customFields,
+              formFields: []
+            }
+          };
+        });
+        
+        console.log("✅ Group visitors data fetched successfully for ID:", visitorId);
+        res.status(200).json({ visitors, count: visitors.length });
+        
+      } catch (groupError) {
+        console.error("❌ Error fetching group visitors:", groupError.message);
+        console.error("❌ Group error stack:", groupError.stack);
+        res.status(500).json({ error: 'Failed to fetch group visitors', details: groupError.message });
+      }
+      
+    } else {
+      // 🔍 Regular visitor ID - fetch single visitor
+      const result = await fetchVisitorDetails(visitorId);
+      console.log("✅ Visitor data fetched successfully for ID:", visitorId);
+      res.status(200).json(result);
+    }
+    
   } catch (err) {
     console.error("❌ Error fetching visitor data:", err.message);
+    console.error("❌ Error stack:", err.stack);
     res.status(500).json({ error: 'Failed to fetch visitor data', details: err.message });
   }
 });
