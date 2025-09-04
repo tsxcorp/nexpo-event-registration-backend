@@ -67,7 +67,7 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
 const submitRegistration = async (data) => {
   // Use Zoho Public REST API
   const formPublicURL =
-    "https://www.zohoapis.com/creator/v2.1/publish/tsxcorp/nxp/form/Master_Registration?privatelink=A982datdqWF3EW9j6QbEdwG0vWXV3ykHz3D4tSGhvPaX1JwfNTUyyCuhGjhpdDJUEgOKXbpuKktqZ7Ssz8bjZj5Awvfd47DnB59C";
+    "https://www.zohoapis.com/creator/v2.1/publish/tsxcorp/nxp/form/Master_Registration?privatelink=DB6mMEa72OwB0T64ZfgAUz782E7rVpJrzCxmABUhYgaykYe1S42sYXsVnMuCyQvt6EWNseuZaFwr1bY8Qbq0b9pryGpusZDD3NR2";
 
   const groupId = `GRP-${Date.now()}`;
   const mainRecordData = data;
