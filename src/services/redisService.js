@@ -42,6 +42,11 @@ class RedisService {
     };
     
     console.log('🔧 Unified Redis Service initialized');
+    
+    // Auto connect
+    this.connect().catch(error => {
+      console.error('❌ Redis auto-connect failed:', error.message);
+    });
   }
 
   /**
@@ -89,7 +94,7 @@ class RedisService {
           return 1000;
         },
         connectTimeout: 5000,
-        lazyConnect: true
+        lazyConnect: false  // Auto connect
       }
     };
   }
@@ -329,7 +334,7 @@ class RedisService {
       // If no event index, try to get from all registrations and create index
       if (!eventIndex) {
         const allRegistrations = await this.get('zoho:Registrations:{"event_id":null}');
-        if (allRegistrations && allRegistrations.data) {
+        if (allRegistrations && allRegistrations.data && Array.isArray(allRegistrations.data)) {
           // Create event index from all registrations
           eventIndex = {};
           allRegistrations.data.forEach(record => {
@@ -594,10 +599,14 @@ class RedisService {
         return false;
       }
       
-      const age = Date.now() - new Date(metadata.last_updated).getTime();
-      const maxAge = this.cacheConfig.ttl.registrations * 1000;
+      // Check if we have data
+      const hasData = metadata.total_records > 0;
+      if (!hasData) {
+        return false;
+      }
       
-      return age < maxAge;
+      // For now, consider cache valid if we have data (ignore TTL)
+      return true;
     } catch (error) {
       console.error('❌ Error checking cache validity:', error);
       return false;
@@ -694,7 +703,7 @@ class RedisService {
    */
   async populateFromZoho(options = {}) {
     try {
-      const { force_refresh = false, max_records = 50000, include_all_events = true } = options;
+      const { force_refresh = false, max_records = 1000, include_all_events = true } = options;
       
       console.log('🚀 Starting cache population from Zoho...');
       console.log(`📊 Options: force_refresh=${force_refresh}, max_records=${max_records}, include_all_events=${include_all_events}`);
@@ -708,6 +717,13 @@ class RedisService {
       if (!force_refresh && await this.isCacheValid()) {
         console.log('✅ Cache is already valid, skipping population');
         return { success: true, message: 'Cache already valid' };
+      }
+      
+      // Check if we already have data in cache
+      const existingData = await this.get('zoho:Registrations:{"event_id":null}');
+      if (existingData && existingData.data && existingData.data.length > 0) {
+        console.log(`✅ Cache already has ${existingData.data.length} records, skipping population`);
+        return { success: true, message: 'Cache already has data' };
       }
       
       const zohoCreatorAPI = require('../utils/zohoCreatorAPI');

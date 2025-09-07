@@ -528,7 +528,7 @@ router.get('/events/:eventId', async (req, res) => {
         
         const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
         const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
-          max_records: 50000, // Increased limit for full data
+          max_records: 1000, // Zoho API limit
           fetchAll: true,
           useCache: false
         });
