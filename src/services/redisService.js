@@ -634,6 +634,73 @@ class RedisService {
     }
   }
 
+  // ==================== ZOHO DATA CACHING ====================
+
+  /**
+   * Cache Zoho data with specific key pattern
+   */
+  async cacheZohoData(reportName, params, data, ttl = 300) {
+    try {
+      const key = `zoho:${reportName}:${JSON.stringify(params)}`;
+      const cacheData = {
+        data,
+        cached_at: new Date().toISOString(),
+        report: reportName,
+        params
+      };
+      
+      await this.set(key, cacheData, ttl);
+      console.log(`📦 Cached Zoho data: ${reportName}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error caching Zoho data:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get cached Zoho data
+   */
+  async getCachedZohoData(reportName, params) {
+    try {
+      const key = `zoho:${reportName}:${JSON.stringify(params)}`;
+      const cached = await this.get(key);
+      
+      if (cached && cached.data) {
+        console.log(`📖 Zoho cache HIT: ${reportName}`);
+        return cached.data;
+      }
+      
+      console.log(`📭 Zoho cache MISS: ${reportName}`);
+      return null;
+    } catch (error) {
+      console.error('❌ Error getting cached Zoho data:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Publish Zoho update to channel
+   */
+  async publishZohoUpdate(reportName, eventId, updateType, data) {
+    try {
+      const channel = `zoho_updates:${reportName}`;
+      const message = {
+        event_id: eventId,
+        update_type: updateType,
+        data,
+        timestamp: new Date().toISOString()
+      };
+      
+      await this.publish(channel, message);
+      console.log(`📢 Published Zoho update: ${reportName}:${updateType}`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error publishing Zoho update:', error);
+      return false;
+    }
+  }
+
   // ==================== PUB/SUB OPERATIONS ====================
 
   /**
