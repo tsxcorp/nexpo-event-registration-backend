@@ -16,11 +16,64 @@ const cacheMissProtection = {
  * @swagger
  * /api/cache/status:
  *   get:
- *     summary: Get cache status and statistics
+ *     summary: Get Redis cache status and statistics
+ *     description: Returns comprehensive cache health information including hit rates, memory usage, and data statistics
  *     tags: [Cache Management]
  *     responses:
  *       200:
- *         description: Cache status information
+ *         description: Cache status retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 cache_stats:
+ *                   type: object
+ *                   properties:
+ *                     connected:
+ *                       type: boolean
+ *                       example: true
+ *                     memory_usage:
+ *                       type: string
+ *                       example: "2.5MB"
+ *                     hit_rate:
+ *                       type: string
+ *                       example: "85.2%"
+ *                     total_keys:
+ *                       type: integer
+ *                       example: 15
+ *                     events_cached:
+ *                       type: integer
+ *                       example: 3
+ *                     registrations_cached:
+ *                       type: integer
+ *                       example: 3934
+ *                     cache_age:
+ *                       type: string
+ *                       example: "0.5h"
+ *                 cache_valid:
+ *                   type: boolean
+ *                   example: true
+ *                 timestamp:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2025-01-07T11:02:50.023Z"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to get cache status"
  */
 router.get('/status', async (req, res) => {
   try {
@@ -47,10 +100,53 @@ router.get('/status', async (req, res) => {
  * /api/cache/populate:
  *   post:
  *     summary: Populate Redis cache from Zoho Creator
+ *     description: Manually triggers cache population by fetching all data from Zoho Creator and storing in Redis
  *     tags: [Cache Management]
  *     responses:
  *       200:
  *         description: Cache populated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Cache populated successfully"
+ *                 result:
+ *                   type: object
+ *                   properties:
+ *                     events_loaded:
+ *                       type: integer
+ *                       example: 3
+ *                     registrations_loaded:
+ *                       type: integer
+ *                       example: 3934
+ *                     exhibitors_loaded:
+ *                       type: integer
+ *                       example: 227
+ *                     cache_size:
+ *                       type: string
+ *                       example: "2.5MB"
+ *                     duration_ms:
+ *                       type: integer
+ *                       example: 15420
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to populate cache"
  */
 router.post('/populate', async (req, res) => {
   try {
@@ -177,7 +273,8 @@ router.post('/reset-protection', async (req, res) => {
  * @swagger
  * /api/cache/events/{eventId}:
  *   get:
- *     summary: Get event registrations from cache
+ *     summary: Get event registrations from Redis cache
+ *     description: Retrieves visitor registrations for a specific event from Redis cache with filtering options
  *     tags: [Cache Management]
  *     parameters:
  *       - in: path
@@ -185,22 +282,110 @@ router.post('/reset-protection', async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
+ *         description: Zoho Creator Event ID
+ *         example: "4433256000012557772"
  *       - in: query
  *         name: status
  *         schema:
  *           type: string
  *           enum: [all, checked_in, not_yet]
+ *         description: Filter by check-in status
+ *         example: "all"
  *       - in: query
  *         name: group_only
  *         schema:
  *           type: boolean
+ *         description: Filter for group registrations only
+ *         example: false
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
+ *         description: Maximum number of records to return
+ *         example: 10000
  *     responses:
  *       200:
- *         description: Event registrations from cache
+ *         description: Event registrations retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       ID:
+ *                         type: string
+ *                         example: "4433256000012345678"
+ *                       Name:
+ *                         type: string
+ *                         example: "Nguyen Van A"
+ *                       Email:
+ *                         type: string
+ *                         example: "nguyenvana@example.com"
+ *                       Check_In_Status:
+ *                         type: string
+ *                         example: "Checked In"
+ *                       Event_Info:
+ *                         type: object
+ *                         properties:
+ *                           ID:
+ *                             type: string
+ *                             example: "4433256000012557772"
+ *                           Name:
+ *                             type: string
+ *                             example: "VIET NAM INTERNATIONAL LOGISTICS EXHIBITION 2025"
+ *                 count:
+ *                   type: integer
+ *                   example: 150
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     total_for_event:
+ *                       type: integer
+ *                       example: 150
+ *                     checked_in:
+ *                       type: integer
+ *                       example: 45
+ *                     not_yet:
+ *                       type: integer
+ *                       example: 105
+ *                     group_registrations:
+ *                       type: integer
+ *                       example: 12
+ *                 metadata:
+ *                   type: object
+ *                   properties:
+ *                     method:
+ *                       type: string
+ *                       example: "redis_cache"
+ *                     cached:
+ *                       type: boolean
+ *                       example: true
+ *                     source:
+ *                       type: string
+ *                       example: "redis"
+ *                     cache_age:
+ *                       type: string
+ *                       example: "0.5h"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to retrieve event registrations"
  */
 router.get('/events/:eventId', async (req, res) => {
   try {
