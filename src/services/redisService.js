@@ -323,15 +323,40 @@ class RedisService {
    */
   async getEventRegistrations(eventId, filters = {}) {
     try {
-      const eventIndex = await this.get('cache:event_index');
+      // First try to get from event index
+      let eventIndex = await this.get('cache:event_index');
+      
+      // If no event index, try to get from all registrations and create index
+      if (!eventIndex) {
+        const allRegistrations = await this.get('zoho:Registrations:{"event_id":null}');
+        if (allRegistrations && allRegistrations.data) {
+          // Create event index from all registrations
+          eventIndex = {};
+          allRegistrations.data.forEach(record => {
+            if (record.Event_Info && record.Event_Info.ID) {
+              const eventId = record.Event_Info.ID;
+              if (!eventIndex[eventId]) {
+                eventIndex[eventId] = [];
+              }
+              eventIndex[eventId].push(record);
+            }
+          });
+          
+          // Cache the event index
+          await this.set('cache:event_index', eventIndex, 300);
+          console.log('📦 Created event index from all registrations');
+        }
+      }
       
       if (!eventIndex || !eventIndex[eventId]) {
+        console.log(`📭 No data found for event ${eventId} in cache`);
         return {
           success: true,
           data: [],
           count: 0,
-          cached: true,
-          source: 'redis'
+          cached: false,
+          source: 'redis',
+          metadata: { method: 'redis_cache' }
         };
       }
       
@@ -619,17 +644,47 @@ class RedisService {
         this.cacheConfig.keys.events,
         this.cacheConfig.keys.visitors,
         'cache:event_index',
-        'cache:metadata'
+        'cache:metadata',
+        'zoho:all_registrations', // Remove duplicate
+        'zoho:Registrations:{"event_id":null}' // Remove duplicate
       ];
       
       for (const key of keys) {
         await this.del(key);
       }
       
-      console.log('✅ Cache cleared');
+      console.log('✅ Cache cleared (including duplicates)');
       return { success: true, message: 'Cache cleared successfully' };
     } catch (error) {
       console.error('❌ Error clearing cache:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Clean duplicate cache entries
+   */
+  async cleanDuplicateCache() {
+    try {
+      console.log('🧹 Cleaning duplicate cache entries...');
+      
+      // Remove old duplicate keys
+      const duplicateKeys = [
+        'zoho:all_registrations'
+      ];
+      
+      for (const key of duplicateKeys) {
+        const exists = await this.exists(key);
+        if (exists) {
+          await this.del(key);
+          console.log(`🗑️ Removed duplicate key: ${key}`);
+        }
+      }
+      
+      console.log('✅ Duplicate cache entries cleaned');
+      return { success: true, message: 'Duplicate cache entries cleaned' };
+    } catch (error) {
+      console.error('❌ Error cleaning duplicate cache:', error);
       return { success: false, error: error.message };
     }
   }

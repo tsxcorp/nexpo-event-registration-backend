@@ -233,6 +233,37 @@ router.post('/clear', async (req, res) => {
 
 /**
  * @swagger
+ * /api/cache/clean-duplicates:
+ *   post:
+ *     summary: Clean duplicate cache entries
+ *     tags: [Cache Management]
+ *     responses:
+ *       200:
+ *         description: Duplicate cache entries cleaned successfully
+ */
+router.post('/clean-duplicates', async (req, res) => {
+  try {
+    console.log('🧹 Manual duplicate cache clean requested');
+    
+    const result = await redisService.cleanDuplicateCache();
+    
+    res.json({
+      success: true,
+      message: 'Duplicate cache entries cleaned successfully',
+      result
+    });
+  } catch (error) {
+    console.error('❌ Duplicate cache clean error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to clean duplicate cache',
+      details: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
  * /api/cache/reset-protection:
  *   post:
  *     summary: Reset cache miss protection
