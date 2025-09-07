@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-// redisService removed - functionality integrated into redisService
+const redisService = require('../services/redisService');
 const socketService = require('../services/socketService');
 
 // Cache miss protection - prevent infinite loops
