@@ -689,6 +689,88 @@ class RedisService {
     }
   }
 
+  /**
+   * Populate cache from Zoho Creator
+   */
+  async populateFromZoho(options = {}) {
+    try {
+      const { force_refresh = false, max_records = 50000, include_all_events = true } = options;
+      
+      console.log('🚀 Starting cache population from Zoho...');
+      console.log(`📊 Options: force_refresh=${force_refresh}, max_records=${max_records}, include_all_events=${include_all_events}`);
+      
+      // Clear existing cache if force refresh
+      if (force_refresh) {
+        await this.clearCache();
+      }
+      
+      // Check if cache is already valid
+      if (!force_refresh && await this.isCacheValid()) {
+        console.log('✅ Cache is already valid, skipping population');
+        return { success: true, message: 'Cache already valid' };
+      }
+      
+      const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
+      
+      // Fetch all registrations with higher limit
+      console.log('📦 Fetching all registrations from Zoho...');
+      const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
+        max_records: max_records,
+        fetchAll: true,
+        useCache: false
+      });
+      
+      if (!allRegistrations.success || !allRegistrations.data) {
+        throw new Error('Failed to fetch registrations from Zoho');
+      }
+      
+      console.log(`📊 Fetched ${allRegistrations.data.length} registrations from Zoho`);
+      
+      // Cache the data
+      await this.cacheZohoData('Registrations', { event_id: null }, allRegistrations, 300);
+      
+      // Create event index
+      const eventIndex = {};
+      allRegistrations.data.forEach(record => {
+        if (record.Event_Info && record.Event_Info.ID) {
+          const eventId = record.Event_Info.ID;
+          if (!eventIndex[eventId]) {
+            eventIndex[eventId] = [];
+          }
+          eventIndex[eventId].push(record);
+        }
+      });
+      
+      // Cache event index
+      await this.set('cache:event_index', eventIndex, 300);
+      console.log(`📦 Created event index with ${Object.keys(eventIndex).length} events`);
+      
+      // Update cache metadata
+      await this.set('cache:metadata', {
+        last_updated: new Date().toISOString(),
+        total_records: allRegistrations.data.length,
+        total_events: Object.keys(eventIndex).length,
+        max_records: max_records
+      }, 300);
+      
+      console.log('✅ Cache population completed successfully');
+      
+      return {
+        success: true,
+        message: 'Cache populated successfully',
+        stats: {
+          total_records: allRegistrations.data.length,
+          total_events: Object.keys(eventIndex).length,
+          max_records: max_records
+        }
+      };
+      
+    } catch (error) {
+      console.error('❌ Error populating cache from Zoho:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // ==================== ZOHO DATA CACHING ====================
 
   /**

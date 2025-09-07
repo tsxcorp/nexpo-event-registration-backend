@@ -152,7 +152,16 @@ router.post('/populate', async (req, res) => {
   try {
     console.log('🚀 Manual cache population requested');
     
-    const result = await redisService.populateFromZoho();
+    // Get parameters from request body
+    const { force_refresh = false, max_records = 50000, include_all_events = true } = req.body;
+    
+    console.log(`📊 Population params: force_refresh=${force_refresh}, max_records=${max_records}, include_all_events=${include_all_events}`);
+    
+    const result = await redisService.populateFromZoho({
+      force_refresh,
+      max_records,
+      include_all_events
+    });
     
     res.json({
       success: true,
@@ -519,7 +528,7 @@ router.get('/events/:eventId', async (req, res) => {
         
         const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
         const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
-          max_records: 1000,
+          max_records: 50000, // Increased limit for full data
           fetchAll: true,
           useCache: false
         });
