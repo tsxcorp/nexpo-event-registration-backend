@@ -712,11 +712,11 @@ class RedisService {
       
       const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
       
-      // Fetch all registrations with higher limit
-      console.log('📦 Fetching all registrations from Zoho...');
+      // Fetch all registrations using pagination (Zoho max is 1000 per request)
+      console.log('📦 Fetching all registrations from Zoho using pagination...');
       const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
-        max_records: max_records,
-        fetchAll: true,
+        max_records: 1000, // Zoho API limit
+        fetchAll: true,    // This will paginate through all records
         useCache: false
       });
       

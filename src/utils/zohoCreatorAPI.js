@@ -63,7 +63,7 @@ class ZohoCreatorAPI {
     const {
       from = 1,
       limit = 200,
-      max_records = 1000, // v2.1 supports up to 1000
+      max_records = 1000, // v2.1 supports up to 1000, but we can use higher for pagination
       criteria = null,
       sortBy = null,
       sortOrder = 'asc',
