@@ -1,5 +1,5 @@
 const axios = require("axios");
-const redisBufferService = require('../services/redisBufferService');
+const redisService = require('../services/redisService');
 
 /**
  * Process Custom_Fields_Value to handle both field_id and field label formats
@@ -223,10 +223,9 @@ const submitRegistration = async (data) => {
         
         try {
           // Buffer the entire submission for retry
-          const bufferResult = await redisBufferService.addToBuffer(
+          const bufferResult = await redisService.addToBuffer(
             data, 
-            'API_LIMIT', 
-            eventInfo
+            'API_LIMIT'
           );
           
           if (bufferResult.success) {
@@ -234,7 +233,7 @@ const submitRegistration = async (data) => {
             const tomorrow = new Date();
             tomorrow.setDate(tomorrow.getDate() + 1);
             tomorrow.setHours(0, 0, 0, 0);
-            await redisBufferService.setLimitResetTime(tomorrow);
+            // API limit reset time tracking removed - simplified buffer system
             
             // Return buffer result instead of throwing error
             return {

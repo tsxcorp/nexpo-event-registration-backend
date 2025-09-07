@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const zohoSyncService = require('../services/zohoSyncService');
+// redisService removed - functionality integrated into redisService
 
 /**
  * Sync Management API
@@ -19,7 +19,7 @@ const zohoSyncService = require('../services/zohoSyncService');
  */
 router.post('/start', async (req, res) => {
   try {
-    const result = await zohoSyncService.startRealTimeSync();
+    const result = await redisService.startRealTimeSync();
     res.json({
       success: true,
       message: 'Real-time synchronization started',
@@ -45,7 +45,7 @@ router.post('/start', async (req, res) => {
  */
 router.post('/stop', async (req, res) => {
   try {
-    const result = await zohoSyncService.stopRealTimeSync();
+    const result = await redisService.stopRealTimeSync();
     res.json({
       success: true,
       message: 'Real-time synchronization stopped',
@@ -71,7 +71,7 @@ router.post('/stop', async (req, res) => {
  */
 router.get('/status', async (req, res) => {
   try {
-    const status = await zohoSyncService.getSyncStatus();
+    const status = await redisService.getSyncStatus();
     res.json({
       success: true,
       data: status,
@@ -96,7 +96,7 @@ router.get('/status', async (req, res) => {
  */
 router.post('/trigger-full', async (req, res) => {
   try {
-    const result = await zohoSyncService.triggerFullSync();
+    const result = await redisService.triggerFullSync();
     res.json({
       success: true,
       message: 'Full synchronization completed',
@@ -146,7 +146,7 @@ router.post('/add-event', async (req, res) => {
       });
     }
     
-    const result = await zohoSyncService.addEventToSync(event_id, priority);
+    const result = await redisService.addEventToSync(event_id, priority);
     res.json({
       success: true,
       message: `Event ${event_id} added to sync monitoring`,
@@ -191,7 +191,7 @@ router.delete('/remove-event', async (req, res) => {
       });
     }
     
-    const result = await zohoSyncService.removeEventFromSync(event_id);
+    const result = await redisService.removeEventFromSync(event_id);
     res.json({
       success: true,
       message: `Event ${event_id} removed from sync monitoring`,

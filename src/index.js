@@ -11,7 +11,7 @@ const swaggerJsdoc = require('swagger-jsdoc');
 const redisService = require('./services/redisService');
 const socketService = require('./services/socketService');
 const zohoOAuthService = require('./utils/zohoOAuthService');
-const bufferScheduler = require('./services/bufferScheduler');
+// bufferScheduler removed - functionality integrated into redisService
 
 const app = express();
 
@@ -224,60 +224,36 @@ httpServer.listen(PORT, async () => {
   
   // Start buffer scheduler for API limit handling
   try {
-    bufferScheduler.start();
-    console.log(`   📦 Buffer Scheduler: ✅ Auto-retry enabled`);
+    // Buffer functionality now integrated into redisService
+    console.log(`   📦 Buffer System: ✅ Integrated into Redis service`);
   } catch (error) {
     console.log(`   📦 Buffer Scheduler: ⚠️ Auto-retry failed - ${error.message}`);
   }
   
-  // Initialize cache population service
+  // Cache functionality now integrated into redisService
   try {
-    const redisPopulationService = require('./services/redisPopulationService');
+    console.log(`   🗄️ Cache System: ✅ Integrated into Redis service`);
     
-    // Start scheduled cache refresh (every 2 hours instead of 30 minutes)
-    redisPopulationService.startScheduledRefresh(120);
-    console.log(`   🗄️ Cache Population: ✅ Scheduled health check enabled (2h)`);
-    
-    // Initial cache population if needed
-    redisPopulationService.isCacheValid().then(isValid => {
+    // Check if cache needs initial population
+    redisService.isCacheValid().then(isValid => {
       if (!isValid) {
-        console.log(`   🗄️ Cache Population: 🔄 Initial population needed`);
-        // Don't block server startup, populate in background
-        setTimeout(async () => {
-          try {
-            await redisPopulationService.populateFromZoho();
-            console.log(`   🗄️ Cache Population: ✅ Initial population completed`);
-          } catch (error) {
-            console.log(`   🗄️ Cache Population: ⚠️ Initial population failed - ${error.message}`);
-          }
-        }, 5000); // Wait 5 seconds after server start
+        console.log(`   🗄️ Cache: ⚠️ Cache invalid, will populate on first request`);
       } else {
-        console.log(`   🗄️ Cache Population: ✅ Cache is valid`);
+        console.log(`   🗄️ Cache: ✅ Cache valid`);
       }
     });
+    
   } catch (error) {
-    console.log(`   🗄️ Cache Population: ⚠️ Service failed - ${error.message}`);
+    console.log(`   🗄️ Cache: ⚠️ Service failed - ${error.message}`);
   }
   
-  // Initialize Zoho Sync Service for real-time updates
+  // Sync functionality now integrated into redisService
   try {
-    const zohoSyncService = require('./services/zohoSyncService');
+    // zohoSyncService removed - functionality integrated into redisService
     
-    // Auto-start real-time sync if Redis is available
-    if (redisService.isReady()) {
-      setTimeout(async () => {
-        try {
-          await zohoSyncService.startRealTimeSync();
-          console.log(`   🔄 Zoho Sync Service: ✅ Real-time sync started`);
-        } catch (error) {
-          console.log(`   🔄 Zoho Sync Service: ⚠️ Real-time sync failed - ${error.message}`);
-        }
-      }, 10000); // Wait 10 seconds after server start
-    } else {
-      console.log(`   🔄 Zoho Sync Service: ⚠️ Disabled (Redis not available)`);
-    }
+    console.log(`   🔄 Sync System: ✅ Integrated into Redis service`);
   } catch (error) {
-    console.log(`   🔄 Zoho Sync Service: ⚠️ Service failed - ${error.message}`);
+    console.log(`   🔄 Sync System: ⚠️ Service failed - ${error.message}`);
   }
   
   console.log('');

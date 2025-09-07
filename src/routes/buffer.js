@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const redisBufferService = require('../services/redisBufferService');
+// redisService removed - functionality integrated into redisService
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 
 /**
@@ -15,11 +15,11 @@ const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
  */
 router.get('/status', async (req, res) => {
   try {
-    const stats = await redisBufferService.getStats();
-    const pendingSubmissions = await redisBufferService.getBufferedSubmissions('pending');
-    const processingSubmissions = await redisBufferService.getBufferedSubmissions('processing');
-    const completedSubmissions = await redisBufferService.getBufferedSubmissions('completed');
-    const limitResetTime = await redisBufferService.getLimitResetTime();
+    const stats = await redisService.getStats();
+    const pendingSubmissions = await redisService.getBufferedSubmissions('pending');
+    const processingSubmissions = await redisService.getBufferedSubmissions('processing');
+    const completedSubmissions = await redisService.getBufferedSubmissions('completed');
+    const limitResetTime = await redisService.getLimitResetTime();
     
     res.json({
       success: true,
@@ -63,7 +63,7 @@ router.get('/status', async (req, res) => {
 router.get('/submissions', async (req, res) => {
   try {
     const { status } = req.query;
-    const submissions = await redisBufferService.getBufferedSubmissions(status);
+    const submissions = await redisService.getBufferedSubmissions(status);
     
     res.json({
       success: true,
@@ -94,7 +94,7 @@ router.post('/retry', async (req, res) => {
   try {
     console.log('🔄 Manual retry queue processing triggered');
     
-    const result = await redisBufferService.processRetryQueue(submitRegistration);
+    const result = await redisService.processRetryQueue(submitRegistration);
     
     res.json({
       success: true,
@@ -124,7 +124,7 @@ router.post('/cleanup', async (req, res) => {
   try {
     console.log('🧹 Manual cleanup triggered');
     
-    const result = await redisBufferService.cleanupCompleted();
+    const result = await redisService.cleanupCompleted();
     
     res.json({
       success: true,
@@ -160,7 +160,7 @@ router.post('/cleanup', async (req, res) => {
 router.get('/submissions/:bufferId', async (req, res) => {
   try {
     const { bufferId } = req.params;
-    const submissions = await redisBufferService.getBufferedSubmissions();
+    const submissions = await redisService.getBufferedSubmissions();
     const submission = submissions.find(s => s.id === bufferId);
     
     if (!submission) {
@@ -204,7 +204,7 @@ router.get('/submissions/:bufferId', async (req, res) => {
 router.post('/submissions/:bufferId/retry', async (req, res) => {
   try {
     const { bufferId } = req.params;
-    const submissions = await redisBufferService.getBufferedSubmissions();
+    const submissions = await redisService.getBufferedSubmissions();
     const submission = submissions.find(s => s.id === bufferId);
     
     if (!submission) {
@@ -224,14 +224,14 @@ router.post('/submissions/:bufferId/retry', async (req, res) => {
     console.log(`🔄 Manual retry for submission ${bufferId}`);
     
     // Update status to processing
-    await redisBufferService.updateSubmissionStatus(bufferId, 'processing');
+    await redisService.updateSubmissionStatus(bufferId, 'processing');
     
     // Attempt submission
     const result = await submitRegistration(submission.submissionData);
     
     if (result.success && result.zoho_record_id) {
       // Success - mark as completed
-      await redisBufferService.updateSubmissionStatus(bufferId, 'completed', result);
+      await redisService.updateSubmissionStatus(bufferId, 'completed', result);
       
       res.json({
         success: true,
@@ -240,7 +240,7 @@ router.post('/submissions/:bufferId/retry', async (req, res) => {
       });
     } else {
       // Still failed - increment attempts
-      await redisBufferService.incrementAttempts(bufferId);
+      await redisService.incrementAttempts(bufferId);
       
       res.json({
         success: false,

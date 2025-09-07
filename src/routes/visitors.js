@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtils');
 const socketService = require('../services/socketService');
-const redisPopulationService = require('../services/redisPopulationService');
+// redisPopulationService removed - functionality integrated into redisService
 const axios = require('axios');
 
 /**

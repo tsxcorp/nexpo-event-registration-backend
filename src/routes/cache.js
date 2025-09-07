@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const redisPopulationService = require('../services/redisPopulationService');
+// redisService removed - functionality integrated into redisService
 const socketService = require('../services/socketService');
 
 // Cache miss protection - prevent infinite loops
@@ -24,12 +24,12 @@ const cacheMissProtection = {
  */
 router.get('/status', async (req, res) => {
   try {
-    const stats = await redisPopulationService.getCacheStats();
+    const stats = await redisService.getCacheStats();
     
     res.json({
       success: true,
       cache_stats: stats,
-      cache_valid: await redisPopulationService.isCacheValid(),
+      cache_valid: await redisService.isCacheValid(),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -56,7 +56,7 @@ router.post('/populate', async (req, res) => {
   try {
     console.log('🚀 Manual cache population requested');
     
-    const result = await redisPopulationService.populateFromZoho();
+    const result = await redisService.populateFromZoho();
     
     res.json({
       success: true,
@@ -87,7 +87,7 @@ router.post('/refresh', async (req, res) => {
   try {
     console.log('🔄 Manual cache refresh requested');
     
-    const result = await redisPopulationService.populateFromZoho();
+    const result = await redisService.populateFromZoho();
     
     res.json({
       success: true,
@@ -118,7 +118,7 @@ router.post('/clear', async (req, res) => {
   try {
     console.log('🧹 Manual cache clear requested');
     
-    const result = await redisPopulationService.clearCache();
+    const result = await redisService.clearCache();
     
     res.json({
       success: true,
@@ -237,7 +237,7 @@ router.get('/events/:eventId', async (req, res) => {
     }
     
     // Try to get from cache first
-    let result = await redisPopulationService.getEventRegistrations(eventId, filters);
+    let result = await redisService.getEventRegistrations(eventId, filters);
     
     // Check if cache miss
     const isCacheMiss = !result.success || result.metadata?.method !== 'redis_cache';
@@ -445,7 +445,7 @@ router.get('/events/:eventId/stats', async (req, res) => {
     console.log(`📊 Getting stats for event: ${eventId}`);
     
     // Get event registrations from cache with no limit to get full stats
-    const result = await redisPopulationService.getEventRegistrations(eventId, { 
+    const result = await redisService.getEventRegistrations(eventId, { 
       status: 'all',
       group_only: false,
       limit: 999999 // No limit for stats calculation
@@ -526,7 +526,7 @@ router.post('/zoho-change', async (req, res) => {
     
     console.log(`🔄 Manual Zoho change request: ${changeType} for record ${recordId}`);
     
-    await redisPopulationService.handleZohoDataChange(changeType, recordId, eventId);
+    await redisService.handleZohoDataChange(changeType, recordId, eventId);
     
     res.json({
       success: true,
@@ -559,7 +559,7 @@ router.get('/integrity', async (req, res) => {
   try {
     console.log('🔍 Manual cache integrity check requested');
     
-    const integrity = await redisPopulationService.validateCacheIntegrity();
+    const integrity = await redisService.validateCacheIntegrity();
     
     res.json({
       success: true,
@@ -589,7 +589,7 @@ router.post('/force-refresh', async (req, res) => {
   try {
     console.log('🔄 Manual force refresh with integrity check requested');
     
-    const integrity = await redisPopulationService.forceRefreshWithIntegrityCheck();
+    const integrity = await redisService.forceRefreshWithIntegrityCheck();
     
     res.json({
       success: true,
@@ -620,7 +620,7 @@ router.post('/health-check', async (req, res) => {
   try {
     console.log('🔍 Manual cache health check requested');
     
-    const isHealthy = await redisPopulationService.checkCacheHealth();
+    const isHealthy = await redisService.checkCacheHealth();
     
     if (isHealthy) {
       res.json({
@@ -631,7 +631,7 @@ router.post('/health-check', async (req, res) => {
       });
     } else {
       console.log('⚠️ Manual health check failed, triggering recovery...');
-      const recovery = await redisPopulationService.handleCacheFailure();
+      const recovery = await redisService.handleCacheFailure();
       
       res.json({
         success: true,

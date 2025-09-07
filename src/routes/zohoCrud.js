@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
-const redisPopulationService = require('../services/redisPopulationService');
+// redisService removed - functionality integrated into redisService
 const redisService = require('../services/redisService');
 const socketService = require('../services/socketService');
 
@@ -65,7 +65,7 @@ router.post('/create', async (req, res) => {
     // Update Redis cache if requested
     if (update_cache && newRecord) {
       try {
-        await redisPopulationService.updateCache(newRecord);
+        await redisService.updateCache(newRecord);
         console.log(`🔄 Redis cache updated with new record: ${newRecord.ID}`);
         
         // Broadcast real-time update
@@ -171,7 +171,7 @@ router.get('/read', async (req, res) => {
     // If event_id and cache enabled, try Redis first
     else if (event_id && use_cache) {
       try {
-        const cachedData = await redisPopulationService.getEventRegistrations(event_id, { limit });
+        const cachedData = await redisService.getEventRegistrations(event_id, { limit });
         if (cachedData.success && cachedData.data.length > 0) {
           result = cachedData;
           dataSource = 'redis_cache';
@@ -292,7 +292,7 @@ router.put('/update', async (req, res) => {
     // Update Redis cache if requested
     if (update_cache && updatedRecord) {
       try {
-        await redisPopulationService.updateSingleRecord(record_id, updatedRecord);
+        await redisService.updateSingleRecord(record_id, updatedRecord);
         console.log(`🔄 Redis cache updated for record: ${record_id}`);
         
         // Broadcast real-time update
@@ -384,7 +384,7 @@ router.delete('/delete', async (req, res) => {
     // Update Redis cache if requested
     if (update_cache) {
       try {
-        await redisPopulationService.handleRecordDelete(record_id, event_id);
+        await redisService.handleRecordDelete(record_id, event_id);
         console.log(`🔄 Redis cache updated - record removed: ${record_id}`);
         
         // Broadcast real-time update
@@ -450,18 +450,18 @@ router.post('/bulk-sync', async (req, res) => {
     
     let result;
     
-    if (force_refresh || !await redisPopulationService.isCacheValid()) {
+    if (force_refresh || !await redisService.isCacheValid()) {
       // Full cache refresh
       console.log('🔄 Performing full cache refresh...');
-      result = await redisPopulationService.populateFromZoho();
+      result = await redisService.populateFromZoho();
     } else {
       // Integrity check and conditional refresh
       console.log('🔍 Performing integrity check...');
-      const integrityCheck = await redisPopulationService.validateCacheIntegrity();
+      const integrityCheck = await redisService.validateCacheIntegrity();
       
       if (!integrityCheck.valid) {
         console.log('⚠️ Cache integrity failed, refreshing...');
-        result = await redisPopulationService.populateFromZoho();
+        result = await redisService.populateFromZoho();
       } else {
         console.log('✅ Cache integrity OK, no refresh needed');
         result = {
@@ -506,8 +506,8 @@ router.post('/bulk-sync', async (req, res) => {
  */
 router.get('/sync-status', async (req, res) => {
   try {
-    const cacheStats = await redisPopulationService.getCacheStats();
-    const integrityCheck = await redisPopulationService.validateCacheIntegrity();
+    const cacheStats = await redisService.getCacheStats();
+    const integrityCheck = await redisService.validateCacheIntegrity();
     
     res.json({
       success: true,

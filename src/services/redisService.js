@@ -1,44 +1,59 @@
 const redis = require('redis');
 
 /**
- * Redis Service for caching and pub/sub
- * Supports both local Redis and cloud Redis providers
+ * Unified Redis Service - Consolidates all Redis functionality
+ * Replaces: redisService, redisBufferService, redisPopulationService, zohoSyncService
  */
 class RedisService {
   constructor() {
     this.client = null;
-    this.publisher = null;
-    this.subscriber = null;
     this.isConnected = false;
     this.retryAttempts = 0;
     this.maxRetries = 3;
-    this.retryDelay = 5000; // 5 seconds
+    this.retryDelay = 5000;
     
-    // Configuration - Use REDIS_URL if available, otherwise fallback to individual config
+    // Configuration
     this.config = this.getRedisConfig();
     
-    console.log('🔧 Redis config initialized:', {
-      hasUrl: !!process.env.REDIS_URL,
-      hasHost: !!process.env.REDIS_HOST,
-      isLocal: !process.env.REDIS_URL && !process.env.REDIS_HOST
-    });
+    // Cache configuration
+    this.cacheConfig = {
+      ttl: {
+        events: 3600,        // 1 hour
+        registrations: 1800,  // 30 minutes
+        visitors: 1800,       // 30 minutes
+        buffer: 7 * 24 * 60 * 60, // 7 days
+        sync: 24 * 60 * 60   // 24 hours
+      },
+      keys: {
+        events: 'cache:events',
+        registrations: 'cache:registrations',
+        visitors: 'cache:visitors',
+        buffer: 'buffer:queue',
+        sync: 'sync:timestamp'
+      }
+    };
+    
+    // Sync configuration
+    this.syncConfig = {
+      webhookEnabled: true,
+      scheduledSync: 60, // 1 hour
+      changeDetection: 15, // 15 minutes
+      maxConcurrentSyncs: 3
+    };
+    
+    console.log('🔧 Unified Redis Service initialized');
   }
 
   /**
    * Get Redis configuration with proper fallbacks
    */
   getRedisConfig() {
-    // Priority 1: REDIS_URL (for cloud providers like Railway, Heroku)
     if (process.env.REDIS_URL) {
       return {
         url: process.env.REDIS_URL,
         socket: {
           reconnectStrategy: (retries) => {
-            if (retries >= this.maxRetries) {
-              console.log('❌ Redis max retries reached, giving up');
-              return false;
-            }
-            console.log(`🔄 Redis reconnecting in ${this.retryDelay}ms (attempt ${retries + 1}/${this.maxRetries})`);
+            if (retries >= this.maxRetries) return false;
             return this.retryDelay;
           },
           connectTimeout: 10000,
@@ -47,7 +62,6 @@ class RedisService {
       };
     }
     
-    // Priority 2: Individual Redis config
     if (process.env.REDIS_HOST) {
       return {
         host: process.env.REDIS_HOST,
@@ -65,14 +79,13 @@ class RedisService {
       };
     }
     
-    // Priority 3: Local Redis fallback (development only)
-    console.log('⚠️ No Redis config found, using local fallback (development only)');
+    // Local fallback
     return {
       host: 'localhost',
       port: 6379,
       socket: {
         reconnectStrategy: (retries) => {
-          if (retries >= 2) return false; // Fail faster for local
+          if (retries >= 2) return false;
           return 1000;
         },
         connectTimeout: 5000,
@@ -82,40 +95,27 @@ class RedisService {
   }
 
   /**
-   * Initialize Redis connections
+   * Initialize Redis connection
    */
   async connect() {
     if (this.isConnected && this.client?.isReady) {
-      console.log('✅ Redis already connected');
       return true;
     }
 
     try {
-      console.log('🔄 Attempting Redis connection...');
+      console.log('🔄 Connecting to Redis...');
       
-      // Create primary client for cache operations
       this.client = redis.createClient(this.config);
       
-      // Setup event handlers before connecting
       this.client.on('error', (err) => {
         console.error('❌ Redis Error:', err.message);
         this.isConnected = false;
-        
-        // Try to reconnect after a delay if not at max retries
-        if (this.retryAttempts < this.maxRetries) {
-          this.retryAttempts++;
-          console.log(`🔄 Will retry Redis connection (${this.retryAttempts}/${this.maxRetries})`);
-        }
-      });
-
-      this.client.on('connect', () => {
-        console.log('🔌 Redis connecting...');
       });
 
       this.client.on('ready', () => {
         console.log('✅ Redis connected and ready');
         this.isConnected = true;
-        this.retryAttempts = 0; // Reset retry counter on successful connection
+        this.retryAttempts = 0;
       });
 
       this.client.on('end', () => {
@@ -123,21 +123,12 @@ class RedisService {
         this.isConnected = false;
       });
 
-      this.client.on('reconnecting', () => {
-        console.log('🔄 Redis reconnecting...');
-      });
-
-      // Connect with timeout
       await Promise.race([
         this.client.connect(),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Connection timeout')), 10000)
         )
       ]);
-
-      // For pub/sub, we'll create separate clients only if needed
-      this.publisher = this.client;
-      this.subscriber = this.client;
 
       console.log('✅ Redis service initialized successfully');
       return true;
@@ -146,12 +137,11 @@ class RedisService {
       console.error('❌ Redis connection failed:', error.message);
       this.isConnected = false;
       
-      // Clean up failed connection
       if (this.client) {
         try {
           await this.client.disconnect();
         } catch (disconnectError) {
-          // Ignore disconnect errors for failed connections
+          // Ignore disconnect errors
         }
         this.client = null;
       }
@@ -168,7 +158,6 @@ class RedisService {
       if (this.client && this.isConnected) {
         await this.client.disconnect();
       }
-      
       this.isConnected = false;
       console.log('✅ Redis disconnected');
     } catch (error) {
@@ -177,13 +166,13 @@ class RedisService {
   }
 
   /**
-   * Check if Redis is connected
+   * Check if Redis is ready
    */
   isReady() {
     return this.isConnected && this.client?.isReady;
   }
 
-  // ==================== CACHE OPERATIONS ====================
+  // ==================== CORE CACHE OPERATIONS ====================
 
   /**
    * Set cache with TTL
@@ -260,6 +249,391 @@ class RedisService {
     }
   }
 
+  // ==================== CACHE MANAGEMENT ====================
+
+  /**
+   * Cache data with type-specific TTL
+   */
+  async cacheData(type, id, data, customTtl = null) {
+    const key = `${this.cacheConfig.keys[type]}:${id}`;
+    const ttl = customTtl || this.cacheConfig.ttl[type] || 3600;
+    
+    return await this.set(key, {
+      data,
+      cached_at: new Date().toISOString(),
+      type,
+      id
+    }, ttl);
+  }
+
+  /**
+   * Get cached data by type and ID
+   */
+  async getCachedData(type, id) {
+    const key = `${this.cacheConfig.keys[type]}:${id}`;
+    const cached = await this.get(key);
+    
+    if (cached && cached.data) {
+      return cached.data;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Cache all registrations with event indexing
+   */
+  async cacheAllRegistrations(registrations) {
+    try {
+      // Cache main data
+      await this.set(this.cacheConfig.keys.registrations, registrations, this.cacheConfig.ttl.registrations);
+      
+      // Create event index
+      const eventIndex = {};
+      registrations.forEach(record => {
+        if (record.Event_Info && record.Event_Info.ID) {
+          const eventId = record.Event_Info.ID;
+          if (!eventIndex[eventId]) {
+            eventIndex[eventId] = [];
+          }
+          eventIndex[eventId].push(record);
+        }
+      });
+      
+      // Cache event index
+      await this.set('cache:event_index', eventIndex, this.cacheConfig.ttl.registrations);
+      
+      // Update cache metadata
+      await this.set('cache:metadata', {
+        total_records: registrations.length,
+        total_events: Object.keys(eventIndex).length,
+        last_updated: new Date().toISOString()
+      }, this.cacheConfig.ttl.sync);
+      
+      console.log(`✅ Cached ${registrations.length} registrations for ${Object.keys(eventIndex).length} events`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error caching registrations:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get event registrations from cache
+   */
+  async getEventRegistrations(eventId, filters = {}) {
+    try {
+      const eventIndex = await this.get('cache:event_index');
+      
+      if (!eventIndex || !eventIndex[eventId]) {
+        return {
+          success: true,
+          data: [],
+          count: 0,
+          cached: true,
+          source: 'redis'
+        };
+      }
+      
+      let filteredData = eventIndex[eventId];
+      
+      // Apply filters
+      if (filters.status && filters.status !== 'all') {
+        filteredData = filteredData.filter(record => {
+          const isCheckedIn = record.Check_In_Status === 'Checked In';
+          if (filters.status === 'checked_in') return isCheckedIn;
+          if (filters.status === 'not_yet') return !isCheckedIn;
+          return true;
+        });
+      }
+      
+      if (filters.group_only === 'true') {
+        filteredData = filteredData.filter(record => record.Group_Registration === 'true');
+      }
+      
+      const limit = parseInt(filters.limit) || 10000;
+      const limitedResults = filteredData.slice(0, limit);
+      
+      return {
+        success: true,
+        data: limitedResults,
+        count: limitedResults.length,
+        cached: true,
+        source: 'redis'
+      };
+    } catch (error) {
+      console.error('❌ Error getting event registrations:', error);
+      return {
+        success: false,
+        data: [],
+        count: 0,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Update cache with new record
+   */
+  async updateCacheWithRecord(newRecord) {
+    try {
+      // Get current cache
+      const allRecords = await this.get(this.cacheConfig.keys.registrations) || [];
+      const eventIndex = await this.get('cache:event_index') || {};
+      
+      // Add new record
+      allRecords.push(newRecord);
+      
+      // Update event index
+      if (newRecord.Event_Info && newRecord.Event_Info.ID) {
+        const eventId = newRecord.Event_Info.ID;
+        if (!eventIndex[eventId]) {
+          eventIndex[eventId] = [];
+        }
+        eventIndex[eventId].push(newRecord);
+      }
+      
+      // Update cache
+      await this.set(this.cacheConfig.keys.registrations, allRecords, this.cacheConfig.ttl.registrations);
+      await this.set('cache:event_index', eventIndex, this.cacheConfig.ttl.registrations);
+      
+      console.log('✅ Cache updated with new record');
+      return true;
+    } catch (error) {
+      console.error('❌ Error updating cache:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove record from cache
+   */
+  async removeRecordFromCache(recordId, eventId = null) {
+    try {
+      const allRecords = await this.get(this.cacheConfig.keys.registrations) || [];
+      const eventIndex = await this.get('cache:event_index') || {};
+      
+      // Remove from all records
+      const updatedRecords = allRecords.filter(record => record.ID !== recordId);
+      
+      // Remove from event index
+      if (eventId && eventIndex[eventId]) {
+        eventIndex[eventId] = eventIndex[eventId].filter(record => record.ID !== recordId);
+      } else {
+        // Search all events
+        Object.keys(eventIndex).forEach(eId => {
+          eventIndex[eId] = eventIndex[eId].filter(record => record.ID !== recordId);
+        });
+      }
+      
+      // Update cache
+      await this.set(this.cacheConfig.keys.registrations, updatedRecords, this.cacheConfig.ttl.registrations);
+      await this.set('cache:event_index', eventIndex, this.cacheConfig.ttl.registrations);
+      
+      console.log(`✅ Record ${recordId} removed from cache`);
+      return true;
+    } catch (error) {
+      console.error('❌ Error removing record from cache:', error);
+      return false;
+    }
+  }
+
+  // ==================== BUFFER SYSTEM ====================
+
+  /**
+   * Add data to buffer queue
+   */
+  async addToBuffer(data, reason = 'API_LIMIT') {
+    try {
+      if (!this.isReady()) {
+        return { success: false, error: 'Redis not available' };
+      }
+
+      const bufferItem = {
+        id: `buf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        timestamp: new Date().toISOString(),
+        data,
+        reason,
+        attempts: 0,
+        maxAttempts: 5,
+        status: 'pending'
+      };
+
+      // Add to buffer queue
+      await this.client.lPush(this.cacheConfig.keys.buffer, JSON.stringify(bufferItem));
+      
+      console.log(`📦 Added to buffer: ${bufferItem.id} (${reason})`);
+      
+      return {
+        success: true,
+        bufferId: bufferItem.id,
+        message: 'Data added to buffer queue'
+      };
+    } catch (error) {
+      console.error('❌ Error adding to buffer:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Process buffer queue
+   */
+  async processBuffer(submitFunction) {
+    try {
+      if (!this.isReady()) {
+        return { success: false, error: 'Redis not available' };
+      }
+
+      const bufferData = await this.client.rPop(this.cacheConfig.keys.buffer);
+      
+      if (!bufferData) {
+        return { success: true, message: 'No data in buffer' };
+      }
+
+      const bufferItem = JSON.parse(bufferData);
+      
+      if (bufferItem.attempts >= bufferItem.maxAttempts) {
+        console.log(`❌ Buffer item ${bufferItem.id} exceeded max attempts`);
+        return { success: false, error: 'Max attempts exceeded' };
+      }
+
+      // Attempt submission
+      const result = await submitFunction(bufferItem.data);
+      
+      if (result.success) {
+        console.log(`✅ Buffer item ${bufferItem.id} processed successfully`);
+        return { success: true, result };
+      } else {
+        // Increment attempts and re-queue
+        bufferItem.attempts++;
+        bufferItem.lastAttempt = new Date().toISOString();
+        
+        if (bufferItem.attempts < bufferItem.maxAttempts) {
+          // Re-queue with delay
+          setTimeout(async () => {
+            await this.client.lPush(this.cacheConfig.keys.buffer, JSON.stringify(bufferItem));
+          }, 30000 * bufferItem.attempts); // Exponential backoff
+        }
+        
+        return { success: false, error: result.error || 'Submission failed' };
+      }
+    } catch (error) {
+      console.error('❌ Error processing buffer:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get buffer status
+   */
+  async getBufferStatus() {
+    try {
+      if (!this.isReady()) {
+        return { length: 0, status: 'disconnected' };
+      }
+
+      const length = await this.client.lLen(this.cacheConfig.keys.buffer);
+      return { length, status: 'connected' };
+    } catch (error) {
+      console.error('❌ Error getting buffer status:', error);
+      return { length: 0, status: 'error' };
+    }
+  }
+
+  // ==================== SYNC MANAGEMENT ====================
+
+  /**
+   * Set last sync timestamp
+   */
+  async setLastSyncTimestamp(key, timestamp = new Date()) {
+    const syncKey = `${this.cacheConfig.keys.sync}:${key}`;
+    return await this.set(syncKey, timestamp.toISOString(), this.cacheConfig.ttl.sync);
+  }
+
+  /**
+   * Get last sync timestamp
+   */
+  async getLastSyncTimestamp(key) {
+    const syncKey = `${this.cacheConfig.keys.sync}:${key}`;
+    const timestamp = await this.get(syncKey);
+    return timestamp ? new Date(timestamp) : null;
+  }
+
+  /**
+   * Check if cache is valid
+   */
+  async isCacheValid() {
+    try {
+      const metadata = await this.get('cache:metadata');
+      if (!metadata) {
+        return false;
+      }
+      
+      const age = Date.now() - new Date(metadata.last_updated).getTime();
+      const maxAge = this.cacheConfig.ttl.registrations * 1000;
+      
+      return age < maxAge;
+    } catch (error) {
+      console.error('❌ Error checking cache validity:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get cache statistics
+   */
+  async getCacheStats() {
+    try {
+      const metadata = await this.get('cache:metadata');
+      const eventIndex = await this.get('cache:event_index');
+      
+      return {
+        total_records: metadata?.total_records || 0,
+        total_events: metadata?.total_events || 0,
+        last_updated: metadata?.last_updated || null,
+        cache_valid: await this.isCacheValid(),
+        events: eventIndex ? Object.keys(eventIndex).map(eventId => ({
+          event_id: eventId,
+          registrations: eventIndex[eventId].length
+        })) : []
+      };
+    } catch (error) {
+      console.error('❌ Error getting cache stats:', error);
+      return {
+        total_records: 0,
+        total_events: 0,
+        last_updated: null,
+        cache_valid: false,
+        events: []
+      };
+    }
+  }
+
+  /**
+   * Clear all cache
+   */
+  async clearCache() {
+    try {
+      const keys = [
+        this.cacheConfig.keys.registrations,
+        this.cacheConfig.keys.events,
+        this.cacheConfig.keys.visitors,
+        'cache:event_index',
+        'cache:metadata'
+      ];
+      
+      for (const key of keys) {
+        await this.del(key);
+      }
+      
+      console.log('✅ Cache cleared');
+      return { success: true, message: 'Cache cleared successfully' };
+    } catch (error) {
+      console.error('❌ Error clearing cache:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // ==================== PUB/SUB OPERATIONS ====================
 
   /**
@@ -277,7 +651,7 @@ class RedisService {
         data: message
       });
       
-      const result = await this.publisher.publish(channel, serialized);
+      const result = await this.client.publish(channel, serialized);
       console.log(`📢 Published to ${channel}: ${result} subscribers`);
       return result;
     } catch (error) {
@@ -296,7 +670,7 @@ class RedisService {
     }
 
     try {
-      await this.subscriber.subscribe(channel, (message) => {
+      await this.client.subscribe(channel, (message) => {
         try {
           const parsed = JSON.parse(message);
           console.log(`📥 Received from ${channel}:`, parsed.data);
@@ -311,184 +685,6 @@ class RedisService {
       return true;
     } catch (error) {
       console.error('❌ Redis SUBSCRIBE error:', error);
-      return false;
-    }
-  }
-
-  // ==================== ZOHO SPECIFIC HELPERS ====================
-
-  /**
-   * Cache Zoho API response
-   */
-  async cacheZohoData(reportName, filters, data, ttlSeconds = 300) {
-    const cacheKey = this.generateZohoCacheKey(reportName, filters);
-    return await this.set(cacheKey, {
-      data,
-      filters,
-      cached_at: new Date().toISOString(),
-      report: reportName
-    }, ttlSeconds);
-  }
-
-  /**
-   * Get cached Zoho data
-   */
-  async getCachedZohoData(reportName, filters) {
-    const cacheKey = this.generateZohoCacheKey(reportName, filters);
-    return await this.get(cacheKey);
-  }
-
-  /**
-   * Publish Zoho data update
-   */
-  async publishZohoUpdate(reportName, eventId, updateType, data) {
-    const channel = eventId ? `zoho:${reportName}:${eventId}` : `zoho:${reportName}:all`;
-    
-    return await this.publish(channel, {
-      type: updateType, // 'update', 'create', 'delete', 'bulk_update'
-      report: reportName,
-      event_id: eventId,
-      data: data,
-      source: 'zoho_api'
-    });
-  }
-
-  /**
-   * Generate cache key for Zoho data
-   */
-  generateZohoCacheKey(reportName, filters = {}) {
-    const filterStr = Object.keys(filters)
-      .sort()
-      .map(key => `${key}:${filters[key]}`)
-      .join('|');
-    
-    return `zoho:${reportName}:${Buffer.from(filterStr).toString('base64')}`;
-  }
-
-  // ==================== BUFFER SYSTEM HELPERS ====================
-
-  /**
-   * Set hash field
-   */
-  async hset(key, field, value, ttlSeconds = null) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, skipping cache set');
-      return false;
-    }
-
-    try {
-      const result = await this.client.hSet(key, field, value);
-      
-      // Set TTL if provided
-      if (ttlSeconds) {
-        await this.client.expire(key, ttlSeconds);
-      }
-      
-      return result;
-    } catch (error) {
-      console.error('❌ Redis HSET error:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get hash field
-   */
-  async hget(key, field) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, cache miss');
-      return null;
-    }
-
-    try {
-      return await this.client.hGet(key, field);
-    } catch (error) {
-      console.error('❌ Redis HGET error:', error);
-      return null;
-    }
-  }
-
-  /**
-   * Get all hash fields
-   */
-  async hgetall(key) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, cache miss');
-      return {};
-    }
-
-    try {
-      return await this.client.hGetAll(key);
-    } catch (error) {
-      console.error('❌ Redis HGETALL error:', error);
-      return {};
-    }
-  }
-
-  /**
-   * Delete hash field
-   */
-  async hdel(key, field) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, skipping cache delete');
-      return false;
-    }
-
-    try {
-      return await this.client.hDel(key, field);
-    } catch (error) {
-      console.error('❌ Redis HDEL error:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Add to sorted set
-   */
-  async zadd(key, score, member) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, skipping sorted set add');
-      return false;
-    }
-
-    try {
-      return await this.client.zAdd(key, { score, value: member });
-    } catch (error) {
-      console.error('❌ Redis ZADD error:', error);
-      return false;
-    }
-  }
-
-  /**
-   * Get range from sorted set by score
-   */
-  async zrangebyscore(key, min, max) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, cache miss');
-      return [];
-    }
-
-    try {
-      return await this.client.zRangeByScore(key, min, max);
-    } catch (error) {
-      console.error('❌ Redis ZRANGEBYSCORE error:', error);
-      return [];
-    }
-  }
-
-  /**
-   * Remove from sorted set
-   */
-  async zrem(key, member) {
-    if (!this.isReady()) {
-      console.warn('⚠️ Redis not ready, skipping sorted set remove');
-      return false;
-    }
-
-    try {
-      return await this.client.zRem(key, member);
-    } catch (error) {
-      console.error('❌ Redis ZREM error:', error);
       return false;
     }
   }

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
-const redisPopulationService = require('../services/redisPopulationService');
+// redisService removed - functionality integrated into redisService
 const redisService = require('../services/redisService');
 const socketService = require('../services/socketService');
 
@@ -155,7 +155,7 @@ router.post('/zoho-creator-function', async (req, res) => {
     console.log(`🔄 Processing Zoho Creator function: ${changeType} for record ${recordId}`);
     
     // Handle the change
-    await redisPopulationService.handleZohoDataChange(changeType, recordId, eventId);
+    await redisService.handleZohoDataChange(changeType, recordId, eventId);
     
     res.json({
       success: true,
@@ -189,9 +189,9 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
       case 'create':
         // New record created - add to cache
         if (recordId) {
-          const newRecord = await redisPopulationService.fetchSingleRecord(recordId);
+          const newRecord = await redisService.fetchSingleRecord(recordId);
           if (newRecord) {
-            await redisPopulationService.updateSingleRecord(recordId, newRecord);
+            await redisService.updateSingleRecord(recordId, newRecord);
             result.success = true;
             result.action = 'record_added';
             console.log(`✅ New record ${recordId} added to cache via webhook`);
@@ -202,9 +202,9 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
       case 'edit':
         // Record updated - update in cache
         if (recordId) {
-          const updatedRecord = await redisPopulationService.fetchSingleRecord(recordId);
+          const updatedRecord = await redisService.fetchSingleRecord(recordId);
           if (updatedRecord) {
-            await redisPopulationService.updateSingleRecord(recordId, updatedRecord);
+            await redisService.updateSingleRecord(recordId, updatedRecord);
             result.success = true;
             result.action = 'record_updated';
             console.log(`✅ Record ${recordId} updated in cache via webhook`);
@@ -215,7 +215,7 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
       case 'delete':
         // Record deleted - remove from cache
         if (recordId) {
-          await redisPopulationService.handleRecordDelete(recordId, eventId);
+          await redisService.handleRecordDelete(recordId, eventId);
           result.success = true;
           result.action = 'record_deleted';
           console.log(`✅ Record ${recordId} removed from cache via webhook`);
@@ -225,7 +225,7 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
       case 'bulk_change':
         // Bulk operation - trigger lightweight sync instead of full refresh
         console.log('🔄 Bulk change detected, performing lightweight sync...');
-        const syncResult = await redisPopulationService.lightweightSync();
+        const syncResult = await redisService.lightweightSync();
         result.success = syncResult.success;
         result.action = 'bulk_sync';
         result.sync_method = syncResult.method;

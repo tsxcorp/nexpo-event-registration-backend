@@ -3,7 +3,7 @@ const router = express.Router();
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
 const socketService = require('../services/socketService');
-const redisPopulationService = require('../services/redisPopulationService');
+// redisService removed - functionality integrated into redisService
 
 /**
  * @swagger
@@ -166,12 +166,12 @@ router.post('/', async (req, res) => {
       console.log('🔄 Updating Redis cache with new registration...');
       
       // Fetch the new record from Zoho and update cache
-      const newRecord = await redisPopulationService.fetchSingleRecord(result.zoho_record_id);
+      const newRecord = await redisService.fetchSingleRecord(result.zoho_record_id);
       if (newRecord) {
-        await redisPopulationService.updateSingleRecord(result.zoho_record_id, newRecord);
+        await redisService.updateSingleRecord(result.zoho_record_id, newRecord);
       } else {
         console.warn('⚠️ Could not fetch new record, triggering full cache refresh...');
-        await redisPopulationService.populateFromZoho();
+        await redisService.populateFromZoho();
       }
       
       // Broadcast to Socket.IO clients
