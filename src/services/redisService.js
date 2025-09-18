@@ -212,7 +212,10 @@ class RedisService {
       const value = await this.client.get(key);
       if (value) {
         console.log(`📖 Cache HIT: ${key}`);
-        return JSON.parse(value);
+        const parsed = JSON.parse(value);
+        if (key === 'cache:metadata') {
+        }
+        return parsed;
       } else {
         console.log(`📭 Cache MISS: ${key}`);
         return null;
@@ -328,8 +331,23 @@ class RedisService {
    */
   async getEventRegistrations(eventId, filters = {}) {
     try {
+      // Ensure Redis is connected
+      if (!this.isConnected) {
+        await this.connect();
+      }
+      
       // First try to get from event index
       let eventIndex = await this.get('cache:event_index');
+      
+      // Parse event index if it's a string
+      if (eventIndex && typeof eventIndex === 'string') {
+        try {
+          eventIndex = JSON.parse(eventIndex);
+        } catch (error) {
+          console.log('❌ Failed to parse event index:', error.message);
+          eventIndex = null;
+        }
+      }
       
       // If no event index, try to get from all registrations and create index
       if (!eventIndex) {
@@ -349,7 +367,6 @@ class RedisService {
           
           // Cache the event index
           await this.set('cache:event_index', eventIndex, 300);
-          console.log('📦 Created event index from all registrations');
         }
       }
       
@@ -724,6 +741,13 @@ class RedisService {
       if (existingData && existingData.data && existingData.data.length > 0) {
         console.log(`✅ Cache already has ${existingData.data.length} records, skipping population`);
         return { success: true, message: 'Cache already has data' };
+      }
+      
+      // Check if we have valid metadata
+      const metadata = await this.get('cache:metadata');
+      if (metadata && metadata.total_records > 0) {
+        console.log(`✅ Cache metadata shows ${metadata.total_records} records, skipping population`);
+        return { success: true, message: 'Cache metadata shows data exists' };
       }
       
       const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
