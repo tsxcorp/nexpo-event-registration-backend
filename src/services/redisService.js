@@ -53,7 +53,9 @@ class RedisService {
    * Get Redis configuration with proper fallbacks
    */
   getRedisConfig() {
+    // Use REDIS_URL if available (for Redis Cloud)
     if (process.env.REDIS_URL) {
+      console.log('🔗 Using REDIS_URL from environment');
       return {
         url: process.env.REDIS_URL,
         socket: {
@@ -62,29 +64,13 @@ class RedisService {
             return this.retryDelay;
           },
           connectTimeout: 10000,
-          lazyConnect: true
+          lazyConnect: false
         }
       };
     }
     
-    if (process.env.REDIS_HOST) {
-      return {
-        host: process.env.REDIS_HOST,
-        port: parseInt(process.env.REDIS_PORT) || 6379,
-        password: process.env.REDIS_PASSWORD || undefined,
-        db: parseInt(process.env.REDIS_DB) || 0,
-        socket: {
-          reconnectStrategy: (retries) => {
-            if (retries >= this.maxRetries) return false;
-            return this.retryDelay;
-          },
-          connectTimeout: 10000,
-          lazyConnect: true
-        }
-      };
-    }
-    
-    // Local fallback
+    // Fallback to local Redis
+    console.log('🏠 Using local Redis fallback');
     return {
       host: 'localhost',
       port: 6379,
@@ -327,7 +313,7 @@ class RedisService {
   }
 
   /**
-   * Get event registrations from cache
+   * Get event registrations from cache (Per-Event Only)
    */
   async getEventRegistrations(eventId, filters = {}) {
     try {
@@ -335,55 +321,25 @@ class RedisService {
       if (!this.isConnected) {
         await this.connect();
       }
-      
-      // First try to get from event index
-      let eventIndex = await this.get('cache:event_index');
-      
-      // Parse event index if it's a string
-      if (eventIndex && typeof eventIndex === 'string') {
-        try {
-          eventIndex = JSON.parse(eventIndex);
-        } catch (error) {
-          console.log('❌ Failed to parse event index:', error.message);
-          eventIndex = null;
-        }
-      }
-      
-      // If no event index, try to get from all registrations and create index
-      if (!eventIndex) {
-        const allRegistrations = await this.get('zoho:Registrations:{"event_id":null}');
-        if (allRegistrations && allRegistrations.data && Array.isArray(allRegistrations.data)) {
-          // Create event index from all registrations
-          eventIndex = {};
-          allRegistrations.data.forEach(record => {
-            if (record.Event_Info && record.Event_Info.ID) {
-              const eventId = record.Event_Info.ID;
-              if (!eventIndex[eventId]) {
-                eventIndex[eventId] = [];
-              }
-              eventIndex[eventId].push(record);
-            }
-          });
-          
-          // Cache the event index
-          await this.set('cache:event_index', eventIndex, 300);
-        }
-      }
-      
-      if (!eventIndex || !eventIndex[eventId]) {
-        console.log(`📭 No data found for event ${eventId} in cache`);
+
+      // Get from per-event cache keys only
+      const perEventKey = `cache:event:${eventId}:registrations`;
+      const perEventData = await this.get(perEventKey);
+
+      if (!perEventData || !Array.isArray(perEventData)) {
+        console.log(`📭 No per-event data found for event ${eventId}`);
         return {
           success: true,
           data: [],
           count: 0,
           cached: false,
           source: 'redis',
-          metadata: { method: 'redis_cache' }
+          metadata: { method: 'per_event_cache_miss' }
         };
       }
-      
-      let filteredData = eventIndex[eventId];
-      
+
+      let filteredData = perEventData;
+
       // Apply filters
       if (filters.status && filters.status !== 'all') {
         filteredData = filteredData.filter(record => {
@@ -393,20 +349,21 @@ class RedisService {
           return true;
         });
       }
-      
+
       if (filters.group_only === 'true') {
         filteredData = filteredData.filter(record => record.Group_Registration === 'true');
       }
-      
+
       const limit = parseInt(filters.limit) || 10000;
       const limitedResults = filteredData.slice(0, limit);
-      
+
       return {
         success: true,
         data: limitedResults,
         count: limitedResults.length,
         cached: true,
-        source: 'redis'
+        source: 'redis',
+        metadata: { method: 'per_event_keys' }
       };
     } catch (error) {
       console.error('❌ Error getting event registrations:', error);
@@ -416,6 +373,49 @@ class RedisService {
         count: 0,
         error: error.message
       };
+    }
+  }
+
+  /**
+   * Populate a single event's registrations from Zoho and cache per-event keys
+   */
+  async populateEventFromZoho(eventId, options = {}) {
+    try {
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      const { max_records = 1000, force_refresh = false } = options;
+
+      if (!force_refresh) {
+        const exists = await this.get(`cache:event:${eventId}:registrations`);
+        if (exists && Array.isArray(exists) && exists.length > 0) {
+          return { success: true, message: 'Per-event cache already exists', count: exists.length };
+        }
+      }
+
+      const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
+      const criteria = `Event_Info.ID = "${eventId}"`;
+      const result = await zohoCreatorAPI.getReportRecords('All_Registrations', {
+        max_records: 1000,
+        fetchAll: true,
+        useCache: false,
+        criteria
+      });
+
+      if (!result.success) {
+        return { success: false, error: 'Zoho fetch failed' };
+      }
+
+      const records = Array.isArray(result.data) ? result.data : [];
+      await this.set(`cache:event:${eventId}:registrations`, records, this.cacheConfig.ttl.registrations);
+      await this.set(`cache:event:${eventId}:count`, { count: records.length }, this.cacheConfig.ttl.registrations);
+      await this.set(`cache:event:${eventId}:meta`, { last_populated: new Date().toISOString(), source: 'zoho' }, this.cacheConfig.ttl.registrations);
+
+      return { success: true, count: records.length };
+    } catch (error) {
+      console.error('❌ Error populating event from Zoho:', error);
+      return { success: false, error: error.message };
     }
   }
 
@@ -784,6 +784,15 @@ class RedisService {
       // Cache event index
       await this.set('cache:event_index', eventIndex, 300);
       console.log(`📦 Created event index with ${Object.keys(eventIndex).length} events`);
+
+      // Also cache per-event keys for fast reads
+      const eventIds = Object.keys(eventIndex);
+      for (const eId of eventIds) {
+        const records = eventIndex[eId];
+        await this.set(`cache:event:${eId}:registrations`, records, this.cacheConfig.ttl.registrations);
+        await this.set(`cache:event:${eId}:count`, { count: records.length }, this.cacheConfig.ttl.registrations);
+        await this.set(`cache:event:${eId}:meta`, { last_populated: new Date().toISOString(), source: 'zoho_full' }, this.cacheConfig.ttl.registrations);
+      }
       
       // Update cache metadata
       await this.set('cache:metadata', {
