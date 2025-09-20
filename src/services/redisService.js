@@ -60,12 +60,17 @@ class RedisService {
         url: process.env.REDIS_URL,
         socket: {
           reconnectStrategy: (retries) => {
-            if (retries >= this.maxRetries) return false;
-            return this.retryDelay;
+            if (retries >= 5) return false;
+            return Math.min(retries * 500, 3000);
           },
-          connectTimeout: 10000,
-          lazyConnect: false
-        }
+          connectTimeout: 15000,
+          commandTimeout: 10000,
+          lazyConnect: false,
+          keepAlive: 30000,
+          family: 4
+        },
+        retryDelayOnFailover: 1000,
+        maxRetriesPerRequest: 3
       };
     }
     
@@ -631,22 +636,51 @@ class RedisService {
   }
 
   /**
-   * Get cache statistics
+   * Get cache statistics (Per-Event Only)
    */
   async getCacheStats() {
     try {
-      const metadata = await this.get('cache:metadata');
-      const eventIndex = await this.get('cache:event_index');
+      // Get all per-event keys
+      const keys = await this.client.keys('cache:event:*:count');
+      let totalRecords = 0;
+      let totalEvents = 0;
+      const events = [];
+      
+      // Process each event
+      for (const key of keys) {
+        const countData = await this.get(key);
+        if (countData && countData.count) {
+          totalRecords += countData.count;
+          totalEvents++;
+          
+          // Extract event ID from key
+          const eventId = key.match(/cache:event:(.+):count/)?.[1];
+          if (eventId) {
+            events.push({
+              event_id: eventId,
+              registrations: countData.count
+            });
+          }
+        }
+      }
+      
+      // Update metadata with correct stats
+      const metadata = {
+        total_records: totalRecords,
+        total_events: totalEvents,
+        last_updated: new Date().toISOString(),
+        max_records: 1000
+      };
+      
+      // Save updated metadata
+      await this.set('cache:metadata', metadata, 3600);
       
       return {
-        total_records: metadata?.total_records || 0,
-        total_events: metadata?.total_events || 0,
-        last_updated: metadata?.last_updated || null,
-        cache_valid: await this.isCacheValid(),
-        events: eventIndex ? Object.keys(eventIndex).map(eventId => ({
-          event_id: eventId,
-          registrations: eventIndex[eventId].length
-        })) : []
+        total_records: totalRecords,
+        total_events: totalEvents,
+        last_updated: metadata.last_updated,
+        cache_valid: totalRecords > 0,
+        events: events
       };
     } catch (error) {
       console.error('❌ Error getting cache stats:', error);
@@ -938,6 +972,145 @@ class RedisService {
       return true;
     } catch (error) {
       console.error('❌ Redis SUBSCRIBE error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update a single record in event cache (for webhooks)
+   */
+  async updateEventRecord(eventId, record, recordId) {
+    try {
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      const registrationsKey = `cache:event:${eventId}:registrations`;
+      const countKey = `cache:event:${eventId}:count`;
+      const metaKey = `cache:event:${eventId}:meta`;
+
+      // Get existing registrations
+      const existingData = await this.client.get(registrationsKey);
+      let registrations = existingData ? JSON.parse(existingData) : [];
+
+      // Update or add record
+      const existingIndex = registrations.findIndex(r => r.ID === recordId);
+      if (existingIndex >= 0) {
+        registrations[existingIndex] = record;
+      } else {
+        registrations.push(record);
+      }
+
+      // Update registrations
+      await this.client.set(registrationsKey, JSON.stringify(registrations));
+      await this.client.expire(registrationsKey, 3600);
+
+      // Update count
+      await this.client.set(countKey, JSON.stringify({ count: registrations.length }));
+      await this.client.expire(countKey, 3600);
+
+      // Update meta
+      const meta = {
+        last_updated: new Date().toISOString(),
+        source: 'webhook_sync',
+        total_records: registrations.length
+      };
+      await this.client.set(metaKey, JSON.stringify(meta));
+      await this.client.expire(metaKey, 3600);
+
+      console.log(`✅ Updated event ${eventId} record ${recordId}: ${registrations.length} total records`);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Update event record error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Remove a single record from event cache (for webhooks)
+   */
+  async removeEventRecord(eventId, recordId) {
+    try {
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      const registrationsKey = `cache:event:${eventId}:registrations`;
+      const countKey = `cache:event:${eventId}:count`;
+      const metaKey = `cache:event:${eventId}:meta`;
+
+      // Get existing registrations
+      const existingData = await this.client.get(registrationsKey);
+      if (!existingData) return true;
+
+      let registrations = JSON.parse(existingData);
+      registrations = registrations.filter(r => r.ID !== recordId);
+
+      // Update registrations
+      await this.client.set(registrationsKey, JSON.stringify(registrations));
+      await this.client.expire(registrationsKey, 3600);
+
+      // Update count
+      await this.client.set(countKey, JSON.stringify({ count: registrations.length }));
+      await this.client.expire(countKey, 3600);
+
+      // Update meta
+      const meta = {
+        last_updated: new Date().toISOString(),
+        source: 'webhook_sync',
+        total_records: registrations.length
+      };
+      await this.client.set(metaKey, JSON.stringify(meta));
+      await this.client.expire(metaKey, 3600);
+
+      console.log(`✅ Removed event ${eventId} record ${recordId}: ${registrations.length} remaining records`);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Remove event record error:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Update cache metadata after webhook changes
+   */
+  async updateCacheMetadata() {
+    try {
+      if (!this.isConnected) {
+        await this.connect();
+      }
+
+      // Get all event count keys
+      const countKeys = await this.client.keys('cache:event:*:count');
+      let totalRecords = 0;
+      let totalEvents = 0;
+
+      for (const key of countKeys) {
+        const countData = await this.client.get(key);
+        if (countData) {
+          const count = JSON.parse(countData);
+          totalRecords += count.count || 0;
+          totalEvents++;
+        }
+      }
+
+      // Update metadata
+      const metadata = {
+        total_records: totalRecords,
+        total_events: totalEvents,
+        last_updated: new Date().toISOString(),
+        max_records: 1000
+      };
+      await this.client.set('cache:metadata', JSON.stringify(metadata));
+      await this.client.expire('cache:metadata', 3600);
+
+      console.log(`📊 Updated cache metadata: ${totalEvents} events, ${totalRecords} records`);
+      return true;
+
+    } catch (error) {
+      console.error('❌ Update cache metadata error:', error);
       return false;
     }
   }

@@ -93,6 +93,7 @@ const eventFilteringRoutes = require('./routes/eventFiltering'); // /api/event-f
 const bufferRoutes = require('./routes/buffer'); // /api/buffer (Redis Buffer Management)
 const cacheRoutes = require('./routes/cache'); // /api/cache (Redis Cache Management)
 const webhookRoutes = require('./routes/webhooks'); // /webhooks (Zoho Webhooks)
+const zohoWebhookSyncRoutes = require('./routes/zohoWebhookSync'); // /api/webhooks (Real-time Sync)
 const zohoCrudRoutes = require('./routes/zohoCrud'); // /api/zoho-crud (CRUD Operations)
 const syncRoutes = require('./routes/sync'); // /api/sync (Sync Management)
 
@@ -109,6 +110,7 @@ app.use('/api/event-filtering', eventFilteringRoutes);
 app.use('/api/buffer', bufferRoutes);
 app.use('/api/cache', cacheRoutes);
 app.use('/webhooks', webhookRoutes);
+app.use('/api/webhooks', zohoWebhookSyncRoutes);
 app.use('/api/zoho-crud', zohoCrudRoutes);
 app.use('/api/sync', syncRoutes);
 
