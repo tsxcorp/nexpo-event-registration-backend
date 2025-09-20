@@ -166,7 +166,8 @@ router.post('/', async (req, res) => {
       console.log('🔄 Updating Redis cache with new registration...');
       
       // Update Redis cache with new record
-      const eventId = result.event_id || result.Event_Info?.ID || result.Event_Info;
+      // Extract eventId from request body (since result might not have Event_Info)
+      const eventId = req.body.Event_Info || req.body.event_id || result.event_id || result.Event_Info?.ID || result.Event_Info;
       const recordId = result.zoho_record_id || result.ID;
       
       console.log('🔍 Debug result for Redis sync:', {
@@ -174,12 +175,20 @@ router.post('/', async (req, res) => {
         Event_Info: result.Event_Info,
         Event_Info_ID: result.Event_Info?.ID,
         zoho_record_id: result.zoho_record_id,
-        ID: result.ID
+        ID: result.ID,
+        requestEventId: req.body.Event_Info,
+        requestEventIdAlt: req.body.event_id
       });
       
       if (eventId && recordId) {
+        // Enhance the result with Event_Info for consistency
+        const enhancedResult = {
+          ...result,
+          Event_Info: eventId
+        };
+        
         console.log(`📝 Syncing new record ${recordId} to Redis for event ${eventId}`);
-        await redisService.updateEventRecord(eventId, result, recordId);
+        await redisService.updateEventRecord(eventId, enhancedResult, recordId);
         await redisService.updateCacheMetadata();
         console.log('✅ Redis cache updated successfully');
       } else {

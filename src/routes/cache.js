@@ -704,4 +704,242 @@ router.post('/health-check', async (req, res) => {
   }
 });
 
+/**
+ * @swagger
+ * /api/cache/events/{eventId}/per-record:
+ *   get:
+ *     summary: Get event registrations using per-record schema (optimized for large events)
+ *     description: Uses individual record keys for better performance with large datasets
+ *     tags: [Cache Management]
+ *     parameters:
+ *       - in: path
+ *         name: eventId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Event ID
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [checked_in, not_yet]
+ *         description: Filter by check-in status
+ *       - in: query
+ *         name: group_only
+ *         schema:
+ *           type: boolean
+ *         description: Filter for group registrations only
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 1000
+ *         description: Maximum number of records to return
+ *       - in: query
+ *         name: offset
+ *         schema:
+ *           type: integer
+ *           minimum: 0
+ *         description: Number of records to skip
+ *     responses:
+ *       200:
+ *         description: Event registrations retrieved successfully using per-record schema
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                 count:
+ *                   type: integer
+ *                 cached:
+ *                   type: boolean
+ *                 source:
+ *                   type: string
+ *                 metadata:
+ *                   type: object
+ *       400:
+ *         description: Invalid request parameters
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/events/:eventId/per-record', async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const options = {
+      status: req.query.status,
+      group_only: req.query.group_only === 'true',
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+      offset: req.query.offset ? parseInt(req.query.offset) : undefined
+    };
+
+    console.log(`🔍 Per-record schema request for event: ${eventId}`);
+    
+    const result = await redisService.getEventRegistrationsPerRecord(eventId, options);
+    
+    res.json({
+      success: true,
+      ...result
+    });
+
+  } catch (error) {
+    console.error('❌ Per-record schema error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/cache/records/{recordId}:
+ *   get:
+ *     summary: Get individual record by ID
+ *     description: Retrieve a single registration record using per-record schema
+ *     tags: [Cache Management]
+ *     parameters:
+ *       - in: path
+ *         name: recordId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record ID
+ *     responses:
+ *       200:
+ *         description: Record retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                 cached:
+ *                   type: boolean
+ *       404:
+ *         description: Record not found
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/records/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+
+    console.log(`🔍 Individual record request: ${recordId}`);
+    
+    const record = await redisService.getIndividualRecord(recordId);
+    
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        error: 'Record not found',
+        recordId
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: record,
+      cached: true
+    });
+
+  } catch (error) {
+    console.error('❌ Individual record error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/cache/records/{recordId}:
+ *   put:
+ *     summary: Update individual record (for check-in operations)
+ *     description: Update a single record using per-record schema for optimal performance
+ *     tags: [Cache Management]
+ *     parameters:
+ *       - in: path
+ *         name: recordId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Record ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               Check_in_Status:
+ *                 type: string
+ *                 enum: [checked_in, not_yet]
+ *               Check_in_Time:
+ *                 type: string
+ *                 format: date-time
+ *     responses:
+ *       200:
+ *         description: Record updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 message:
+ *                   type: string
+ *       400:
+ *         description: Invalid request body
+ *       404:
+ *         description: Record not found
+ *       500:
+ *         description: Internal server error
+ */
+router.put('/records/:recordId', async (req, res) => {
+  try {
+    const { recordId } = req.params;
+    const updates = req.body;
+
+    console.log(`🔍 Update individual record: ${recordId}`, updates);
+    
+    const success = await redisService.updateIndividualRecord(recordId, updates);
+    
+    if (!success) {
+      return res.status(404).json({
+        success: false,
+        error: 'Record not found or update failed',
+        recordId
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Record updated successfully',
+      recordId
+    });
+
+  } catch (error) {
+    console.error('❌ Update individual record error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+      message: error.message
+    });
+  }
+});
+
 module.exports = router;

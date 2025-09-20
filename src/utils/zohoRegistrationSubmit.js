@@ -264,19 +264,29 @@ const submitRegistration = async (data) => {
     
     // Get the main record data from Zoho response
     const mainRecord = responses[0].data;
-    const eventId = mainRecord.Event_Info?.ID || mainRecord.Event_Info;
+    
+    // Extract eventId from request data (since Zoho response doesn't include Event_Info)
+    const eventId = data.Event_Info || data.event_id || mainRecord.Event_Info?.ID || mainRecord.Event_Info;
     
     console.log('🔍 Debug mainRecord:', {
       ID: mainRecord.ID,
       Event_Info: mainRecord.Event_Info,
-      Event_Info_ID: mainRecord.Event_Info?.ID
+      Event_Info_ID: mainRecord.Event_Info?.ID,
+      requestEventId: data.Event_Info,
+      requestEventIdAlt: data.event_id
     });
     
     if (eventId) {
+      // Enhance the record with Event_Info for consistency
+      const enhancedRecord = {
+        ...mainRecord,
+        Event_Info: eventId
+      };
+      
       console.log(`📝 Syncing main record ${mainRecord.ID} to Redis for event ${eventId}`);
       
       // Sync main record to Redis
-      await redisService.updateEventRecord(eventId, mainRecord, mainRecord.ID);
+      await redisService.updateEventRecord(eventId, enhancedRecord, mainRecord.ID);
       
       // Sync group member records if any
       if (responses.length > 1) {
@@ -284,8 +294,12 @@ const submitRegistration = async (data) => {
         
         for (let i = 1; i < responses.length; i++) {
           const memberRecord = responses[i].data;
+          const enhancedMemberRecord = {
+            ...memberRecord,
+            Event_Info: eventId
+          };
           console.log(`📝 Syncing member record ${memberRecord.ID} to Redis`);
-          await redisService.updateEventRecord(eventId, memberRecord, memberRecord.ID);
+          await redisService.updateEventRecord(eventId, enhancedMemberRecord, memberRecord.ID);
         }
       }
       
