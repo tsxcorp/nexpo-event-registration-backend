@@ -264,7 +264,13 @@ const submitRegistration = async (data) => {
     
     // Get the main record data from Zoho response
     const mainRecord = responses[0].data;
-    const eventId = mainRecord.Event_Info?.ID;
+    const eventId = mainRecord.Event_Info?.ID || mainRecord.Event_Info;
+    
+    console.log('🔍 Debug mainRecord:', {
+      ID: mainRecord.ID,
+      Event_Info: mainRecord.Event_Info,
+      Event_Info_ID: mainRecord.Event_Info?.ID
+    });
     
     if (eventId) {
       console.log(`📝 Syncing main record ${mainRecord.ID} to Redis for event ${eventId}`);

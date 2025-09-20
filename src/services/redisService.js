@@ -18,9 +18,9 @@ class RedisService {
     // Cache configuration
     this.cacheConfig = {
       ttl: {
-        events: 3600,        // 1 hour
-        registrations: 1800,  // 30 minutes
-        visitors: 1800,       // 30 minutes
+        events: 0,           // lifetime (no expiration)
+        registrations: 0,    // lifetime (no expiration)
+        visitors: 0,         // lifetime (no expiration)
         buffer: 7 * 24 * 60 * 60, // 7 days
         sync: 24 * 60 * 60   // 24 hours
       },
@@ -173,7 +173,7 @@ class RedisService {
   /**
    * Set cache with TTL
    */
-  async set(key, value, ttlSeconds = 3600) {
+  async set(key, value, ttlSeconds = -1) {
     if (!this.isReady()) {
       console.warn('⚠️ Redis not ready, skipping cache set');
       return false;
@@ -181,8 +181,14 @@ class RedisService {
 
     try {
       const serialized = JSON.stringify(value);
-      await this.client.setEx(key, ttlSeconds, serialized);
-      console.log(`📝 Cache SET: ${key} (TTL: ${ttlSeconds}s)`);
+      if (ttlSeconds > 0) {
+        await this.client.setEx(key, ttlSeconds, serialized);
+        console.log(`📝 Cache SET: ${key} (TTL: ${ttlSeconds}s)`);
+      } else {
+        // For lifetime (no expiration), use set without TTL
+        await this.client.set(key, serialized);
+        console.log(`📝 Cache SET: ${key} (lifetime - no expiration)`);
+      }
       return true;
     } catch (error) {
       console.error('❌ Redis SET error:', error);
@@ -255,7 +261,7 @@ class RedisService {
    */
   async cacheData(type, id, data, customTtl = null) {
     const key = `${this.cacheConfig.keys[type]}:${id}`;
-    const ttl = customTtl || this.cacheConfig.ttl[type] || 3600;
+    const ttl = customTtl || this.cacheConfig.ttl[type] || -1;
     
     return await this.set(key, {
       data,
@@ -673,7 +679,7 @@ class RedisService {
       };
       
       // Save updated metadata
-      await this.set('cache:metadata', metadata, 3600);
+      await this.set('cache:metadata', metadata, -1);
       
       return {
         total_records: totalRecords,
@@ -1003,11 +1009,11 @@ class RedisService {
 
       // Update registrations
       await this.client.set(registrationsKey, JSON.stringify(registrations));
-      await this.client.expire(registrationsKey, 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       // Update count
       await this.client.set(countKey, JSON.stringify({ count: registrations.length }));
-      await this.client.expire(countKey, 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       // Update meta
       const meta = {
@@ -1016,7 +1022,7 @@ class RedisService {
         total_records: registrations.length
       };
       await this.client.set(metaKey, JSON.stringify(meta));
-      await this.client.expire(metaKey, 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       console.log(`✅ Updated event ${eventId} record ${recordId}: ${registrations.length} total records`);
       return true;
@@ -1049,11 +1055,11 @@ class RedisService {
 
       // Update registrations
       await this.client.set(registrationsKey, JSON.stringify(registrations));
-      await this.client.expire(registrationsKey, 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       // Update count
       await this.client.set(countKey, JSON.stringify({ count: registrations.length }));
-      await this.client.expire(countKey, 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       // Update meta
       const meta = {
@@ -1062,7 +1068,7 @@ class RedisService {
         total_records: registrations.length
       };
       await this.client.set(metaKey, JSON.stringify(meta));
-      await this.client.expire(metaKey, 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       console.log(`✅ Removed event ${eventId} record ${recordId}: ${registrations.length} remaining records`);
       return true;
@@ -1104,7 +1110,7 @@ class RedisService {
         max_records: 1000
       };
       await this.client.set('cache:metadata', JSON.stringify(metadata));
-      await this.client.expire('cache:metadata', 3600);
+      // TTL = 0 means no expiration (lifetime)
 
       console.log(`📊 Updated cache metadata: ${totalEvents} events, ${totalRecords} records`);
       return true;

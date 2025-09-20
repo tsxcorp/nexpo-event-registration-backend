@@ -3,7 +3,7 @@ const router = express.Router();
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
 const socketService = require('../services/socketService');
-// redisService removed - functionality integrated into redisService
+const redisService = require('../services/redisService');
 
 /**
  * @swagger
@@ -165,13 +165,25 @@ router.post('/', async (req, res) => {
     try {
       console.log('🔄 Updating Redis cache with new registration...');
       
-      // Fetch the new record from Zoho and update cache
-      const newRecord = await redisService.fetchSingleRecord(result.zoho_record_id);
-      if (newRecord) {
-        await redisService.updateSingleRecord(result.zoho_record_id, newRecord);
+      // Update Redis cache with new record
+      const eventId = result.event_id || result.Event_Info?.ID || result.Event_Info;
+      const recordId = result.zoho_record_id || result.ID;
+      
+      console.log('🔍 Debug result for Redis sync:', {
+        event_id: result.event_id,
+        Event_Info: result.Event_Info,
+        Event_Info_ID: result.Event_Info?.ID,
+        zoho_record_id: result.zoho_record_id,
+        ID: result.ID
+      });
+      
+      if (eventId && recordId) {
+        console.log(`📝 Syncing new record ${recordId} to Redis for event ${eventId}`);
+        await redisService.updateEventRecord(eventId, result, recordId);
+        await redisService.updateCacheMetadata();
+        console.log('✅ Redis cache updated successfully');
       } else {
-        console.warn('⚠️ Could not fetch new record, triggering full cache refresh...');
-        await redisService.populateFromZoho();
+        console.warn('⚠️ Missing eventId or recordId, skipping Redis sync');
       }
       
       // Broadcast to Socket.IO clients
