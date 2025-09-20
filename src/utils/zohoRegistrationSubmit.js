@@ -258,6 +258,43 @@ const submitRegistration = async (data) => {
     }
   }
 
+  // 🚀 NEW: Direct Redis sync after successful Zoho submission
+  try {
+    console.log('🔄 Syncing new records directly to Redis...');
+    
+    // Get the main record data from Zoho response
+    const mainRecord = responses[0].data;
+    const eventId = mainRecord.Event_Info?.ID;
+    
+    if (eventId) {
+      console.log(`📝 Syncing main record ${mainRecord.ID} to Redis for event ${eventId}`);
+      
+      // Sync main record to Redis
+      await redisService.updateEventRecord(eventId, mainRecord, mainRecord.ID);
+      
+      // Sync group member records if any
+      if (responses.length > 1) {
+        console.log(`👥 Syncing ${responses.length - 1} group member records to Redis...`);
+        
+        for (let i = 1; i < responses.length; i++) {
+          const memberRecord = responses[i].data;
+          console.log(`📝 Syncing member record ${memberRecord.ID} to Redis`);
+          await redisService.updateEventRecord(eventId, memberRecord, memberRecord.ID);
+        }
+      }
+      
+      // Update cache metadata
+      await redisService.updateCacheMetadata();
+      
+      console.log('✅ All records synced to Redis successfully');
+    } else {
+      console.log('⚠️ No event ID found in main record, skipping Redis sync');
+    }
+  } catch (redisError) {
+    console.error('❌ Redis sync failed (non-critical):', redisError);
+    // Don't fail the entire submission if Redis sync fails
+  }
+
   return { 
     success: true, 
     responses, 
