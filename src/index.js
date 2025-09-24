@@ -81,7 +81,8 @@ app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 
 // === Route declarations ===
-const eventRoutes = require('./routes/events');               // /api/events/:id
+const eventRoutes = require('./routes/events');               // /api/events/:id (Custom API)
+const eventRESTRoutes = require('./routes/eventsREST');       // /api/events-rest (REST API)
 const registrationRoutes = require('./routes/registrations'); // /api/registrations
 const importRoutes = require('./routes/imports');              // /api/imports
 const visitorRoutes = require('./routes/visitors');           // /api/visitors
@@ -96,8 +97,10 @@ const webhookRoutes = require('./routes/webhooks'); // /webhooks (Zoho Webhooks)
 const zohoWebhookSyncRoutes = require('./routes/zohoWebhookSync'); // /api/webhooks (Real-time Sync)
 const zohoCrudRoutes = require('./routes/zohoCrud'); // /api/zoho-crud (CRUD Operations)
 const syncRoutes = require('./routes/sync'); // /api/sync (Sync Management)
+const syncWorkerRoutes = require('./routes/syncWorker'); // /api/sync-worker (Sync Worker Management)
 
 app.use('/api/events', eventRoutes);
+app.use('/api/events-rest', eventRESTRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/imports', importRoutes);
 app.use('/api/visitors', visitorRoutes);
@@ -113,6 +116,7 @@ app.use('/webhooks', webhookRoutes);
 app.use('/api/webhooks', zohoWebhookSyncRoutes);
 app.use('/api/zoho-crud', zohoCrudRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/sync-worker', syncWorkerRoutes);
 
 // Serve static files for widget testing
 app.use(express.static('./', { 
