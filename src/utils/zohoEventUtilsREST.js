@@ -153,29 +153,14 @@ const fetchSingleEventREST = async (eventId, token) => {
 
     const eventData = eventResponse.data.data;
 
-    // 2. Get form fields from All_Events response (Form_Fields field)
-    let formFields = [];
-    if (eventData.Form_Fields && Array.isArray(eventData.Form_Fields)) {
-      formFields = eventData.Form_Fields.map((field, index) => ({
-        field_id: field.ID || `auto_field_${index}`,
-        sort: parseInt(field.Sort) || index,
-        label: field.Label || "",
-        type: field.Type_field || "",
-        required: false, // Not available in this response
-        groupmember: false, // Not available in this response
-        helptext: "", // Not available in this response
-        placeholder: "", // Not available in this response
-        field_condition: "", // Not available in this response
-        section_id: "", // Not available in this response
-        section_name: "", // Not available in this response
-        section_sort: 0, // Not available in this response
-        section_condition: "", // Not available in this response
-        matching_field: false, // Not available in this response
-        values: [], // Not available in this response
-        translation: null // Not available in this response
-      }));
-      logger.info(`Found ${formFields.length} form fields in All_Events response`);
-    }
+     // 2. Fetch form fields from All_Custom_Fields report
+     let formFields = [];
+     try {
+       formFields = await fetchEventFormFields(eventId, token);
+       logger.info(`Fetched ${formFields.length} form fields from All_Custom_Fields`);
+     } catch (error) {
+       logger.warn(`Failed to fetch form fields for event ${eventId}:`, error.message);
+     }
 
     // 3. Get exhibitors from Event_Exhibitors report
     let exhibitors = [];
@@ -274,11 +259,11 @@ const fetchSingleEventREST = async (eventId, token) => {
 };
 
 /**
- * Fetch form fields for an event
+ * Fetch form fields for an event from All_Custom_Fields report
  */
 const fetchEventFormFields = async (eventId, token) => {
   try {
-    const formFieldsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/Event_Forms`;
+    const formFieldsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/All_Custom_Fields`;
     
     const response = await axios.get(formFieldsUrl, {
       headers: {
@@ -287,12 +272,12 @@ const fetchEventFormFields = async (eventId, token) => {
       },
       params: {
         field_config: 'all',
-        criteria: `Event_ID = ${eventId}`
+        criteria: `Event_Info = ${eventId}`
       }
     });
 
     if (response.data.code !== 3000 || !response.data.data) {
-      logger.warn(`No form fields found for event ${eventId}`);
+      logger.warn(`No form fields found for event ${eventId} in All_Custom_Fields`);
       return [];
     }
 
@@ -314,7 +299,8 @@ const fetchEventFormFields = async (eventId, token) => {
       section_condition: field.Section_Condition || "",
       matching_field: field.Matching_Field === true || field.Matching_Field === "true",
       values: field.Values ? field.Values.split(',').map(v => v.trim()) : [],
-      translation: field.Translation ? JSON.parse(field.Translation) : null
+      translation: field.Translation ? JSON.parse(field.Translation) : null,
+      status: field.Status || "active" // Add Status field for render decision
     }));
 
   } catch (error) {

@@ -84,7 +84,7 @@ class RedisService {
   normalizeZohoRecord(record) {
     if (!record) return null;
     
-    return {
+      return {
       id: record.ID,
       event_id: record.Event_Info?.ID || record.Event_Info,
       redeem_id: record.Redeem_ID,
@@ -122,8 +122,8 @@ class RedisService {
     if (typeof value === 'string') {
       return value.toLowerCase() === 'true';
     }
-    return false;
-  }
+              return false;
+            }
 
   /**
    * Get record version for conflict resolution
@@ -328,7 +328,7 @@ class RedisService {
     try {
       const serialized = JSON.stringify(value);
       if (ttlSeconds > 0) {
-        await this.client.setEx(key, ttlSeconds, serialized);
+      await this.client.setEx(key, ttlSeconds, serialized);
         this.log('DEBUG', `📝 Cache SET: ${key} (TTL: ${ttlSeconds}s)`);
       } else {
         // For lifetime (no expiration), use set without TTL
@@ -608,7 +608,7 @@ class RedisService {
       
       console.log('✅ Cache updated with new record');
       return true;
-    } catch (error) {
+        } catch (error) {
       console.error('❌ Error updating cache:', error);
       return false;
     }
@@ -661,7 +661,7 @@ class RedisService {
       const bufferItem = {
         id: `buf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         timestamp: new Date().toISOString(),
-        data,
+      data,
         reason,
         attempts: 0,
         maxAttempts: 5,
@@ -822,7 +822,7 @@ class RedisService {
           const eventId = key.match(/cache:event:(.+):count/)?.[1];
           if (eventId) {
             events.push({
-              event_id: eventId,
+      event_id: eventId,
               registrations: countData.count
             });
           }
@@ -1148,7 +1148,7 @@ class RedisService {
           const parsed = JSON.parse(message);
           console.log(`📥 Received from ${channel}:`, parsed.data);
           callback(parsed.data, parsed.timestamp);
-        } catch (error) {
+    } catch (error) {
           console.error('❌ Message parse error:', error);
           callback(message, new Date().toISOString());
         }
@@ -1338,8 +1338,8 @@ class RedisService {
       
       if (!existingRecord) {
         console.log(`⚠️ Record ${recordId} not found for update`);
-        return false;
-      }
+      return false;
+    }
 
       // Merge updates with existing record
       const updatedRecord = { ...existingRecord, ...updates };
