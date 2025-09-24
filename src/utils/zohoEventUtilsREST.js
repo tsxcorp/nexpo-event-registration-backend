@@ -20,9 +20,15 @@ logger.info(`  ZOHO_BASE_URL: ${ZOHO_BASE_URL ? '✅ Set' : '❌ Missing'}`);
 logger.info(`  ZOHO_PUBLIC_KEY: ${ZOHO_PUBLIC_KEY ? '✅ Set' : '❌ Missing'}`);
 
 /**
- * Get Zoho OAuth token from tokens.json
+ * Get Zoho OAuth token from environment variable or tokens.json
  */
 const getZohoToken = () => {
+  // Try environment variable first (for production)
+  if (process.env.ZOHO_ACCESS_TOKEN) {
+    return process.env.ZOHO_ACCESS_TOKEN;
+  }
+  
+  // Fallback to tokens.json (for local development)
   try {
     const tokens = require('../../tokens.json');
     return tokens.accessToken || tokens.access_token;
