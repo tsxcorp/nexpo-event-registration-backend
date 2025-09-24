@@ -1,5 +1,11 @@
 const axios = require('axios');
-const logger = require('./logger');
+// Use console.log fallback for production compatibility
+const logger = {
+  info: (...args) => console.log('[INFO]', ...args),
+  error: (...args) => console.error('[ERROR]', ...args),
+  warn: (...args) => console.warn('[WARN]', ...args),
+  debug: (...args) => console.log('[DEBUG]', ...args)
+};
 
 /**
  * Zoho Creator OAuth 2.0 Service
@@ -24,9 +30,20 @@ class ZohoOAuthService {
   }
 
   /**
-   * Load tokens from file
+   * Load tokens from environment variables or file
    */
   loadTokensFromFile() {
+    // Try environment variables first (for production)
+    if (process.env.ZOHO_ACCESS_TOKEN && process.env.ZOHO_REFRESH_TOKEN) {
+      logger.info("Tokens loaded from environment variables");
+      return {
+        accessToken: process.env.ZOHO_ACCESS_TOKEN,
+        refreshToken: process.env.ZOHO_REFRESH_TOKEN,
+        expiresAt: process.env.ZOHO_TOKEN_EXPIRES_AT ? parseInt(process.env.ZOHO_TOKEN_EXPIRES_AT) : null
+      };
+    }
+    
+    // Fallback to file (for local development)
     try {
       const fs = require('fs');
       const path = require('path');
@@ -49,9 +66,21 @@ class ZohoOAuthService {
   }
 
   /**
-   * Save tokens to file
+   * Save tokens to file or environment (production)
    */
   saveTokensToFile() {
+    // In production, we can't modify environment variables at runtime
+    // But we can log the new tokens for manual update
+    if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+      logger.info("🔄 NEW TOKENS FOR PRODUCTION:");
+      logger.info(`ZOHO_ACCESS_TOKEN=${this.tokenStore.accessToken}`);
+      logger.info(`ZOHO_REFRESH_TOKEN=${this.tokenStore.refreshToken}`);
+      logger.info(`ZOHO_TOKEN_EXPIRES_AT=${this.tokenStore.expiresAt}`);
+      logger.info("Please update these environment variables in Railway dashboard");
+      return;
+    }
+    
+    // Save to file for local development
     try {
       const fs = require('fs');
       const path = require('path');
