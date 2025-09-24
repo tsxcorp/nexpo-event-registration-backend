@@ -283,6 +283,11 @@ const fetchEventFormFields = async (eventId, token) => {
 
     const formFieldsData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
     
+    // Debug: Log first field to see available fields
+    if (formFieldsData.length > 0) {
+      logger.info(`Debug: First form field keys:`, Object.keys(formFieldsData[0]));
+    }
+    
     return formFieldsData.map((field, index) => ({
       field_id: field.Field_ID || `auto_field_${index}`,
       sort: field.Sort_Order || index,
@@ -300,7 +305,7 @@ const fetchEventFormFields = async (eventId, token) => {
       matching_field: field.Matching_Field === true || field.Matching_Field === "true",
       values: field.Values ? field.Values.split(',').map(v => v.trim()) : [],
       translation: field.Translation ? JSON.parse(field.Translation) : null,
-      status: field.Status || "active" // Add Status field for render decision
+      status: field.Status || field.Active || field.Status_Field || field.Field_Status || "active" // Add Status field for render decision
     }));
 
   } catch (error) {
