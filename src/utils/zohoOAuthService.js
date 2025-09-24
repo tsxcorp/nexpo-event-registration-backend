@@ -332,25 +332,42 @@ class ZohoOAuthService {
    * Start auto-refresh timer to prevent token expiration
    */
   startAutoRefreshTimer() {
-    // Check every 30 minutes
-    setInterval(async () => {
-      try {
-        // Check if token will expire in next 10 minutes
-        if (this.tokenStore.accessToken && this.tokenStore.expiresAt) {
-          const tenMinutesFromNow = Date.now() + (10 * 60 * 1000);
-          
-          if (this.tokenStore.expiresAt < tenMinutesFromNow) {
-            logger.info("⏰ Token expiring soon, proactively refreshing...");
-            await this.refreshAccessToken();
-            logger.info("Proactive token refresh completed");
-          }
-        }
-      } catch (error) {
-        logger.error("Auto-refresh timer error:", error.message);
-      }
-    }, 30 * 60 * 1000); // Every 30 minutes
+    logger.info("🔄 Starting auto-refresh timer...");
     
-    logger.info("⏰ Auto-refresh timer started (checks every 30 minutes)");
+    // Initial check
+    this.checkAndRefreshToken();
+    
+    // Check every 5 minutes for more frequent monitoring
+    setInterval(async () => {
+      await this.checkAndRefreshToken();
+    }, 5 * 60 * 1000); // Check every 5 minutes
+    
+    logger.info("⏰ Auto-refresh timer started (checks every 5 minutes)");
+  }
+  
+  /**
+   * Check if token needs refresh and refresh if necessary
+   */
+  async checkAndRefreshToken() {
+    try {
+      // Check if token will expire in next 10 minutes
+      if (this.tokenStore.accessToken && this.tokenStore.expiresAt) {
+        const tenMinutesFromNow = Date.now() + (10 * 60 * 1000);
+        
+        if (this.tokenStore.expiresAt < tenMinutesFromNow) {
+          logger.info("⏰ Token expiring soon, proactively refreshing...");
+          await this.refreshAccessToken();
+          logger.info("✅ Proactive token refresh completed");
+        } else {
+          const timeUntilExpiry = Math.round((this.tokenStore.expiresAt - Date.now()) / 1000 / 60);
+          logger.info(`🕐 Token expires in ${timeUntilExpiry} minutes`);
+        }
+      } else {
+        logger.warn("⚠️ No access token or expiry time found");
+      }
+    } catch (error) {
+      logger.error("Auto-refresh check error:", error.message);
+    }
   }
 }
 
