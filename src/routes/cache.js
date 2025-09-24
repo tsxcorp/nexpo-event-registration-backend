@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const redisService = require('../services/redisService');
+const logger = require('../utils/logger');
 const socketService = require('../services/socketService');
 
 // Cache miss protection - prevent infinite loops
@@ -86,7 +87,7 @@ router.get('/status', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Cache status error:', error);
+    logger.error('Cache status error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to get cache status',
@@ -150,12 +151,12 @@ router.get('/status', async (req, res) => {
  */
 router.post('/populate', async (req, res) => {
   try {
-    console.log('🚀 Manual cache population requested');
+    logger.info('Manual cache population requested');
     
     // Get parameters from request body
     const { force_refresh = false, max_records = 50000, include_all_events = true } = req.body;
     
-    console.log(`📊 Population params: force_refresh=${force_refresh}, max_records=${max_records}, include_all_events=${include_all_events}`);
+    logger.info(`Population params: force_refresh=${force_refresh}, max_records=${max_records}, include_all_events=${include_all_events}`);
     
     const result = await redisService.populateFromZoho({
       force_refresh,
@@ -169,7 +170,7 @@ router.post('/populate', async (req, res) => {
       result
     });
   } catch (error) {
-    console.error('❌ Cache population error:', error);
+    logger.error('Cache population error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to populate cache',
@@ -190,7 +191,7 @@ router.post('/populate', async (req, res) => {
  */
 router.post('/refresh', async (req, res) => {
   try {
-    console.log('🔄 Manual cache refresh requested');
+    logger.info('Manual cache refresh requested');
     
     const result = await redisService.populateFromZoho();
     
@@ -200,7 +201,7 @@ router.post('/refresh', async (req, res) => {
       result
     });
   } catch (error) {
-    console.error('❌ Cache refresh error:', error);
+    logger.error('Cache refresh error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to refresh cache',
@@ -221,7 +222,7 @@ router.post('/refresh', async (req, res) => {
  */
 router.post('/clear', async (req, res) => {
   try {
-    console.log('🧹 Manual cache clear requested');
+    logger.info('Manual cache clear requested');
     
     const result = await redisService.clearCache();
     
@@ -231,7 +232,7 @@ router.post('/clear', async (req, res) => {
       result
     });
   } catch (error) {
-    console.error('❌ Cache clear error:', error);
+    logger.error('Cache clear error:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to clear cache',
@@ -252,7 +253,7 @@ router.post('/clear', async (req, res) => {
  */
 router.post('/clean-duplicates', async (req, res) => {
   try {
-    console.log('🧹 Manual duplicate cache clean requested');
+    logger.info('Manual duplicate cache clean requested');
     
     const result = await redisService.cleanDuplicateCache();
     

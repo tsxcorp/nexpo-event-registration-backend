@@ -1,5 +1,6 @@
 const { Server } = require('socket.io');
 const redisService = require('./redisService');
+const logger = require('../utils/logger');
 
 /**
  * WebSocket Service for real-time data push to Zoho Widgets
@@ -60,7 +61,7 @@ class SocketService {
     this.setupEventHandlers();
     this.setupRedisSubscriptions();
     
-    console.log('✅ Socket.IO server initialized');
+    logger.info("Socket.IO server initialized");
     return this.io;
   }
 
@@ -69,7 +70,7 @@ class SocketService {
    */
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`🔌 Client connected: ${socket.id}`);
+      logger.info("Client connected: ${socket.id}");
       
       // Store client info
       this.connectedClients.set(socket.id, {
@@ -86,7 +87,7 @@ class SocketService {
           this.rooms.add(room);
           this.connectedClients.get(socket.id)?.rooms.add(room);
           
-          console.log(`📍 Client ${socket.id} joined event room: ${room}`);
+          logger.info(`📍 Client ${socket.id} joined event room: ${room}`);
           socket.emit('joined_event', { event_id: eventId, room });
         }
       });
@@ -99,7 +100,7 @@ class SocketService {
           this.rooms.add(room);
           this.connectedClients.get(socket.id)?.rooms.add(room);
           
-          console.log(`📊 Client ${socket.id} subscribed to report: ${room}`);
+          logger.info("Client ${socket.id} subscribed to report: ${room}");
           socket.emit('subscribed_report', { report: reportName, room });
         }
       });
@@ -111,14 +112,14 @@ class SocketService {
           this.rooms.add(roomName);
           this.connectedClients.get(socket.id)?.rooms.add(roomName);
           
-          console.log(`🏠 Client ${socket.id} joined custom room: ${roomName}`);
+          logger.info("Client ${socket.id} joined custom room: ${roomName}");
           socket.emit('joined_room', { room: roomName });
         }
       });
 
       // Handle disconnect
       socket.on('disconnect', (reason) => {
-        console.log(`🔌 Client disconnected: ${socket.id} (${reason})`);
+        logger.info("Client disconnected: ${socket.id} (${reason})");
         this.connectedClients.delete(socket.id);
       });
 
@@ -137,8 +138,8 @@ class SocketService {
    */
   async setupRedisSubscriptions() {
     if (!redisService.isReady()) {
-      console.log('⚠️ Redis not ready, skipping Redis subscriptions');
-      console.log('📱 Socket.IO will work in standalone mode without Redis pub/sub');
+      logger.info("⚠️ Redis not ready, skipping Redis subscriptions");
+      logger.info('📱 Socket.IO will work in standalone mode without Redis pub/sub');
       return;
     }
 
@@ -153,10 +154,10 @@ class SocketService {
         this.handleRegistrationUpdate(data, timestamp);
       });
 
-      console.log('✅ Redis subscriptions setup for Socket.IO');
+      logger.info("Redis subscriptions setup for Socket.IO");
     } catch (error) {
-      console.error('❌ Failed to setup Redis subscriptions:', error.message);
-      console.log('📱 Socket.IO will continue without Redis pub/sub');
+      logger.error("Failed to setup Redis subscriptions:", error.message);
+      logger.info('📱 Socket.IO will continue without Redis pub/sub');
     }
   }
 
@@ -233,7 +234,7 @@ class SocketService {
         server_timestamp: new Date().toISOString()
       });
       
-      console.log(`📡 Broadcast to room ${room}: ${clientCount} clients`);
+      logger.info(`📡 Broadcast to room ${room}: ${clientCount} clients`);
       return true;
     }
     
@@ -253,7 +254,7 @@ class SocketService {
       server_timestamp: new Date().toISOString()
     });
     
-    console.log(`📡 Broadcast to ALL: ${clientCount} clients`);
+    logger.info(`📡 Broadcast to ALL: ${clientCount} clients`);
     return clientCount > 0;
   }
 
@@ -268,7 +269,7 @@ class SocketService {
       server_timestamp: new Date().toISOString()
     });
     
-    console.log(`📤 Sent to client ${clientId}`);
+    logger.info("Sent to client ${clientId}");
     return true;
   }
 
@@ -294,7 +295,7 @@ class SocketService {
         // Publish to Redis for other instances
         await redisService.publishZohoUpdate('Registrations', eventId, updateType, payload);
       } catch (error) {
-        console.warn('⚠️ Redis operation failed, continuing without cache:', error.message);
+        logger.warn("Redis operation failed, continuing without cache:", error.message);
       }
     }
 
@@ -329,7 +330,7 @@ class SocketService {
       try {
         await redisService.publishZohoUpdate('Registrations', eventId, 'checkin_update', payload);
       } catch (error) {
-        console.warn('⚠️ Redis publish failed, continuing without Redis:', error.message);
+        logger.warn("Redis publish failed, continuing without Redis:", error.message);
       }
     }
 

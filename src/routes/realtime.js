@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const socketService = require('../services/socketService');
 const redisService = require('../services/redisService');
@@ -53,7 +54,7 @@ router.post('/push/test', (req, res) => {
       delivered: result
     });
   } catch (error) {
-    console.error('❌ Test push error:', error);
+    logger.error("Test push error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to send test message',
@@ -118,7 +119,7 @@ router.post('/registrations/refresh', async (req, res) => {
       pushed_to_sockets: true
     });
   } catch (error) {
-    console.error('❌ Registration refresh error:', error);
+    logger.error("Registration refresh error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to refresh registration data',
@@ -186,7 +187,7 @@ router.post('/checkin/simulate', async (req, res) => {
       pushed_to_sockets: true
     });
   } catch (error) {
-    console.error('❌ Check-in simulation error:', error);
+    logger.error("Check-in simulation error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to simulate check-in',
@@ -260,7 +261,7 @@ router.post('/cache/clear', async (req, res) => {
       redis_connected: redisService.isReady()
     });
   } catch (error) {
-    console.error('❌ Cache clear error:', error);
+    logger.error("Cache clear error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to clear cache',

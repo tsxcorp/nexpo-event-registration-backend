@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('./logger');
 
 /**
  * Zoho Creator OAuth 2.0 Service
@@ -33,11 +34,11 @@ class ZohoOAuthService {
       
       if (fs.existsSync(tokenFile)) {
         const tokens = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
-        console.log('✅ Tokens loaded from file');
+        logger.info("Tokens loaded from file");
         return tokens;
       }
     } catch (error) {
-      console.log('⚠️ Could not load tokens from file:', error.message);
+      logger.info("⚠️ Could not load tokens from file:", error.message);
     }
     
     return {
@@ -57,9 +58,9 @@ class ZohoOAuthService {
       const tokenFile = path.join(process.cwd(), 'tokens.json');
       
       fs.writeFileSync(tokenFile, JSON.stringify(this.tokenStore, null, 2));
-      console.log('✅ Tokens saved to file');
+      logger.info("Tokens saved to file");
     } catch (error) {
-      console.log('⚠️ Could not save tokens to file:', error.message);
+      logger.info("⚠️ Could not save tokens to file:", error.message);
     }
   }
 
@@ -87,7 +88,7 @@ class ZohoOAuthService {
    */
   async getAccessToken(code) {
     try {
-      console.log('🔑 Exchanging authorization code for access token...');
+      logger.info('🔑 Exchanging authorization code for access token...');
       
       const response = await axios.post(this.config.tokenEndpoint, null, {
         params: {
@@ -113,8 +114,8 @@ class ZohoOAuthService {
         // Save to file
         this.saveTokensToFile();
         
-        console.log('✅ Access token obtained successfully');
-        console.log('📅 Token expires at:', new Date(this.tokenStore.expiresAt));
+        logger.info("Access token obtained successfully");
+        logger.info('📅 Token expires at:', new Date(this.tokenStore.expiresAt));
         
         return {
           success: true,
@@ -127,7 +128,7 @@ class ZohoOAuthService {
         throw new Error('No access token in response');
       }
     } catch (error) {
-      console.error('❌ Error getting access token:', error.response?.data || error.message);
+      logger.error("Error getting access token:", error.response?.data || error.message);
       throw new Error(`Failed to get access token: ${error.response?.data?.error || error.message}`);
     }
   }
@@ -142,7 +143,7 @@ class ZohoOAuthService {
     }
 
     try {
-      console.log('🔄 Refreshing access token...');
+      logger.info("Refreshing access token...");
       
       const response = await axios.post(this.config.tokenEndpoint, null, {
         params: {
@@ -169,8 +170,8 @@ class ZohoOAuthService {
         // Save to file
         this.saveTokensToFile();
         
-        console.log('✅ Access token refreshed successfully');
-        console.log('📅 New token expires at:', new Date(this.tokenStore.expiresAt));
+        logger.info("Access token refreshed successfully");
+        logger.info('📅 New token expires at:', new Date(this.tokenStore.expiresAt));
         
         return {
           success: true,
@@ -183,7 +184,7 @@ class ZohoOAuthService {
         throw new Error('No access token in refresh response');
       }
     } catch (error) {
-      console.error('❌ Error refreshing access token:', error.response?.data || error.message);
+      logger.error("Error refreshing access token:", error.response?.data || error.message);
       throw new Error(`Failed to refresh access token: ${error.response?.data?.error || error.message}`);
     }
   }
@@ -235,15 +236,15 @@ class ZohoOAuthService {
         
         // Check if it's a 401 error and we haven't exhausted retries
         if (error.response?.status === 401 && attempt < maxRetries) {
-          console.log(`🔄 401 error on attempt ${attempt + 1}, refreshing token and retrying...`);
+          logger.info("401 error on attempt ${attempt + 1}, refreshing token and retrying...");
           
           try {
             // Force refresh token
             await this.refreshAccessToken();
-            console.log('✅ Token refreshed, retrying API call...');
+            logger.info("Token refreshed, retrying API call...");
             continue; // Retry with new token
           } catch (refreshError) {
-            console.error('❌ Token refresh failed:', refreshError.message);
+            logger.error("Token refresh failed:", refreshError.message);
             throw new Error(`API call failed and token refresh unsuccessful: ${refreshError.message}`);
           }
         }
@@ -265,7 +266,7 @@ class ZohoOAuthService {
     this.tokenStore.accessToken = tokens.accessToken;
     this.tokenStore.refreshToken = tokens.refreshToken;
     this.tokenStore.expiresAt = tokens.expiresAt;
-    console.log('✅ Tokens set manually');
+    logger.info("Tokens set manually");
   }
 
   /**
@@ -295,7 +296,7 @@ class ZohoOAuthService {
       refreshToken: null,
       expiresAt: null
     };
-    console.log('🗑️ All tokens cleared');
+    logger.info('🗑️ All tokens cleared');
   }
 
   /**
@@ -310,17 +311,17 @@ class ZohoOAuthService {
           const tenMinutesFromNow = Date.now() + (10 * 60 * 1000);
           
           if (this.tokenStore.expiresAt < tenMinutesFromNow) {
-            console.log('⏰ Token expiring soon, proactively refreshing...');
+            logger.info("⏰ Token expiring soon, proactively refreshing...");
             await this.refreshAccessToken();
-            console.log('✅ Proactive token refresh completed');
+            logger.info("Proactive token refresh completed");
           }
         }
       } catch (error) {
-        console.error('❌ Auto-refresh timer error:', error.message);
+        logger.error("Auto-refresh timer error:", error.message);
       }
     }, 30 * 60 * 1000); // Every 30 minutes
     
-    console.log('⏰ Auto-refresh timer started (checks every 30 minutes)');
+    logger.info("⏰ Auto-refresh timer started (checks every 30 minutes)");
   }
 }
 

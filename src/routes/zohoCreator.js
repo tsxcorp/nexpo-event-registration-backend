@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
 
@@ -154,13 +155,13 @@ router.get('/reports/:reportName/records', async (req, res) => {
     if (fetchAll) options.fetchAll = fetchAll === 'true';
     if (field_config) options.field_config = field_config;
     
-    console.log(`📊 Getting records from report: ${reportName} (v2.1 API)`);
+    logger.info("Getting records from report: ${reportName} (v2.1 API)");
     const result = await zohoCreatorAPI.getReportRecords(reportName, options);
     
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error getting report records:', error);
+    logger.error("Error getting report records:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get report records',
@@ -209,7 +210,7 @@ router.get('/reports/:reportName/records/:recordId', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error getting record:', error);
+    logger.error("Error getting record:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get record',
@@ -274,7 +275,7 @@ router.post('/forms/:formName/records', async (req, res) => {
     res.status(201).json(result);
     
   } catch (error) {
-    console.error('❌ Error creating record:', error);
+    logger.error("Error creating record:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to create record',
@@ -340,7 +341,7 @@ router.patch('/reports/:reportName/records/:recordId', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error updating record:', error);
+    logger.error("Error updating record:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to update record',
@@ -385,7 +386,7 @@ router.delete('/reports/:reportName/records/:recordId', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error deleting record:', error);
+    logger.error("Error deleting record:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to delete record',
@@ -463,7 +464,7 @@ router.post('/reports/:reportName/search', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error searching records:', error);
+    logger.error("Error searching records:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to search records',
@@ -502,7 +503,7 @@ router.get('/forms/:formName/metadata', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error getting form metadata:', error);
+    logger.error("Error getting form metadata:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get form metadata',
@@ -588,7 +589,7 @@ router.post('/bulk/:operation', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Error performing bulk operation:', error);
+    logger.error("Error performing bulk operation:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to perform bulk operation',
@@ -677,7 +678,7 @@ router.get('/registrations', async (req, res) => {
       // sortOrder: 'desc'
     };
     
-    console.log('📊 Getting registrations with filters:', { event_id, status, criteria });
+    logger.info("Getting registrations with filters:", { event_id, status, criteria });
     
     const result = await zohoCreatorAPI.getReportRecords('Registrations', options);
     
@@ -695,7 +696,7 @@ router.get('/registrations', async (req, res) => {
     res.json(enhancedResult);
     
   } catch (error) {
-    console.error('❌ Error getting registrations:', error);
+    logger.error("Error getting registrations:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get registrations',

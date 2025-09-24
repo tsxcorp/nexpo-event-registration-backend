@@ -1,4 +1,5 @@
 const axios = require("axios");
+const logger = require('./logger');
 const redisService = require('../services/redisService');
 
 /**
@@ -10,8 +11,8 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
     return {};
   }
 
-  console.log('🔄 Processing Custom_Fields_Value:', customFieldsValue);
-  console.log('📋 Available field definitions:', fieldDefinitions.length);
+  logger.info("Processing Custom_Fields_Value:", customFieldsValue);
+  logger.info('📋 Available field definitions:', fieldDefinitions.length);
 
   const processedFields = {};
   
@@ -23,7 +24,7 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
       const fieldLabel = value.field_label;
       const fieldCondition = value.field_condition;
       
-      console.log(`📊 Metadata format detected for "${key}":`, {
+      logger.info(`Metadata format detected for "${key}":`, {
         label: fieldLabel,
         condition: fieldCondition,
         value: fieldValue
@@ -31,7 +32,7 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
       
       // Use the key as field_id directly (frontend should send field_id as key)
       processedFields[key] = fieldValue;
-      console.log(`✅ Metadata processed: ${key} = ${fieldValue}`);
+      logger.info(`Metadata processed: ${key} = ${fieldValue}`);
       return;
     }
     
@@ -40,7 +41,7 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
     if (fieldByFieldId) {
       // Legacy format: key is field_id, value is simple value
       processedFields[key] = value;
-      console.log(`✅ Field ID format detected: ${key} = ${value}`);
+      logger.info(`Field ID format detected: ${key} = ${value}`);
       return;
     }
     
@@ -49,16 +50,16 @@ const processCustomFields = (customFieldsValue, fieldDefinitions = []) => {
     if (fieldByLabel && fieldByLabel.field_id) {
       // Legacy format: key is label, convert to field_id
       processedFields[fieldByLabel.field_id] = value;
-      console.log(`🔄 Converted label to field_id: "${key}" → "${fieldByLabel.field_id}" = ${value}`);
+      logger.info(`Converted label to field_id: "${key}" → "${fieldByLabel.field_id}" = ${value}`);
       return;
     }
     
     // If no match found, keep original key (for unknown fields or core fields)
     processedFields[key] = value;
-    console.log(`⚠️ No field mapping found for: "${key}", keeping original key`);
+    logger.info(`⚠️ No field mapping found for: "${key}", keeping original key`);
   });
   
-  console.log('📋 Final processed custom fields:', processedFields);
+  logger.info('📋 Final processed custom fields:', processedFields);
   return processedFields;
 };
 
@@ -76,7 +77,7 @@ const submitRegistration = async (data) => {
   
   // Detect if this is a group registration
   const isGroupRegistration = groupMembers && groupMembers.length > 0;
-  console.log(`👥 Group registration detected: ${isGroupRegistration} (${groupMembers.length} members)`);;
+  logger.info(`👥 Group registration detected: ${isGroupRegistration} (${groupMembers.length} members)`);;
   
   // Get field definitions for processing (if available)
   // Note: In a real implementation, you might want to fetch this from your event data
@@ -123,7 +124,7 @@ const submitRegistration = async (data) => {
           if (value && typeof value === 'object' && 'value' in value) {
             // Metadata format: extract the actual value
             memberCustomFields[key] = value.value;
-            console.log(`📊 Member metadata field: ${key} = ${value.value} (label: ${value.field_label})`);
+            logger.info("Member metadata field: ${key} = ${value.value} (label: ${value.field_label})");
           } else {
             // Simple format: use value directly
             memberCustomFields[key] = value;
@@ -139,12 +140,12 @@ const submitRegistration = async (data) => {
     });
     
     mainRecord.Group_Members = JSON.stringify(processedGroupMembers);
-    console.log('👥 Group_Members JSON added to main record:', mainRecord.Group_Members);
+    logger.info('👥 Group_Members JSON added to main record:', mainRecord.Group_Members);
   }
 
   records.push(mainRecord);
   
-  console.log('📋 Main record built:', JSON.stringify(mainRecord, null, 2));
+  logger.info('📋 Main record built:', JSON.stringify(mainRecord, null, 2));
 
   // 2. Process group member records
   const coreFields = ['Salutation', 'Full_Name', 'Email', 'Phone_Number', 'title', 'full_name', 'email', 'mobile_number'];
@@ -185,7 +186,7 @@ const submitRegistration = async (data) => {
 
   for (let i = 0; i < records.length; i++) {
     const payload = { data: records[i] };
-    console.log(`📤 Sending record ${i + 1}/${records.length} to Zoho:`, JSON.stringify(payload, null, 2));
+    logger.info("Sending record ${i + 1}/${records.length} to Zoho:", JSON.stringify(payload, null, 2));
 
     try {
       const response = await axios.post(formPublicURL, payload, {
@@ -211,7 +212,7 @@ const submitRegistration = async (data) => {
 
       responses.push(resData);
     } catch (err) {
-      console.error(`❌ Error pushing record ${i + 1}:`, err.response?.data || err.message);
+      logger.error("Error pushing record ${i + 1}:", err.response?.data || err.message);
       
       // Check if this is an API limit error
       const isApiLimitError = err.response?.data?.code === 4000 || 
@@ -219,7 +220,7 @@ const submitRegistration = async (data) => {
                              err.message.includes('too many requests');
       
       if (isApiLimitError) {
-        console.log(`🚨 API limit reached for record ${i + 1}, attempting to buffer submission...`);
+        logger.info(`🚨 API limit reached for record ${i + 1}, attempting to buffer submission...`);
         
         try {
           // Buffer the entire submission for retry
@@ -245,11 +246,11 @@ const submitRegistration = async (data) => {
               note: 'Your registration is safe and will be processed automatically'
             };
           } else {
-            console.error('❌ Failed to buffer submission:', bufferResult.error);
+            logger.error("Failed to buffer submission:", bufferResult.error);
             throw new Error(`API limit reached and failed to buffer submission: ${bufferResult.error}`);
           }
         } catch (bufferError) {
-          console.error('❌ Error in buffer system:', bufferError);
+          logger.error("Error in buffer system:", bufferError);
           throw new Error(`API limit reached. Unable to buffer submission due to: ${bufferError.message}`);
         }
       }
@@ -260,7 +261,7 @@ const submitRegistration = async (data) => {
 
   // 🚀 NEW: Direct Redis sync after successful Zoho submission
   try {
-    console.log('🔄 Syncing new records directly to Redis...');
+    logger.info("Syncing new records directly to Redis...");
     
     // Get the main record data from Zoho response
     const mainRecord = responses[0].data;
@@ -268,7 +269,7 @@ const submitRegistration = async (data) => {
     // Extract eventId from request data (since Zoho response doesn't include Event_Info)
     const eventId = data.Event_Info || data.event_id || mainRecord.Event_Info?.ID || mainRecord.Event_Info;
     
-    console.log('🔍 Debug mainRecord:', {
+    logger.info("Debug mainRecord:", {
       ID: mainRecord.ID,
       Event_Info: mainRecord.Event_Info,
       Event_Info_ID: mainRecord.Event_Info?.ID,
@@ -283,14 +284,14 @@ const submitRegistration = async (data) => {
         Event_Info: eventId
       };
       
-      console.log(`📝 Syncing main record ${mainRecord.ID} to Redis for event ${eventId}`);
+      logger.info("Syncing main record ${mainRecord.ID} to Redis for event ${eventId}");
       
       // Sync main record to Redis
       await redisService.updateEventRecord(eventId, enhancedRecord, mainRecord.ID);
       
       // Sync group member records if any
       if (responses.length > 1) {
-        console.log(`👥 Syncing ${responses.length - 1} group member records to Redis...`);
+        logger.info(`👥 Syncing ${responses.length - 1} group member records to Redis...`);
         
         for (let i = 1; i < responses.length; i++) {
           const memberRecord = responses[i].data;
@@ -298,7 +299,7 @@ const submitRegistration = async (data) => {
             ...memberRecord,
             Event_Info: eventId
           };
-          console.log(`📝 Syncing member record ${memberRecord.ID} to Redis`);
+          logger.info("Syncing member record ${memberRecord.ID} to Redis");
           await redisService.updateEventRecord(eventId, enhancedMemberRecord, memberRecord.ID);
         }
       }
@@ -306,12 +307,12 @@ const submitRegistration = async (data) => {
       // Update cache metadata
       await redisService.updateCacheMetadata();
       
-      console.log('✅ All records synced to Redis successfully');
+      logger.info("All records synced to Redis successfully");
     } else {
-      console.log('⚠️ No event ID found in main record, skipping Redis sync');
+      logger.info("⚠️ No event ID found in main record, skipping Redis sync");
     }
   } catch (redisError) {
-    console.error('❌ Redis sync failed (non-critical):', redisError);
+    logger.error("Redis sync failed (non-critical):", redisError);
     // Don't fail the entire submission if Redis sync fails
   }
 

@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
 // redisService removed - functionality integrated into redisService
@@ -38,7 +39,7 @@ router.post('/create', async (req, res) => {
   try {
     const { report_name, data, update_cache = true } = req.body;
     
-    console.log(`📝 Creating new record in ${report_name}:`, data);
+    logger.info("Creating new record in ${report_name}:", data);
     
     // Validate required fields
     if (!report_name || !data) {
@@ -60,13 +61,13 @@ router.post('/create', async (req, res) => {
     }
     
     const newRecord = zohoResponse.data;
-    console.log(`✅ Record created in Zoho:`, newRecord);
+    logger.info("Record created in Zoho:", newRecord);
     
     // Update Redis cache if requested
     if (update_cache && newRecord) {
       try {
         await redisService.updateCache(newRecord);
-        console.log(`🔄 Redis cache updated with new record: ${newRecord.ID}`);
+        logger.info("Redis cache updated with new record: ${newRecord.ID}");
         
         // Broadcast real-time update
         await socketService.broadcastToAll('record_created', {
@@ -77,7 +78,7 @@ router.post('/create', async (req, res) => {
         });
         
       } catch (cacheError) {
-        console.error('❌ Cache update error:', cacheError);
+        logger.error("Cache update error:", cacheError);
         // Don't fail the entire operation, just log the error
       }
     }
@@ -92,7 +93,7 @@ router.post('/create', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Create record error:', error);
+    logger.error("Create record error:", error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -153,7 +154,7 @@ router.get('/read', async (req, res) => {
       });
     }
     
-    console.log(`📖 Reading data from ${report_name}:`, {
+    logger.info(`📖 Reading data from ${report_name}:`, {
       record_id,
       event_id,
       use_cache,
@@ -184,7 +185,7 @@ router.get('/read', async (req, res) => {
           dataSource = 'zoho_fallback';
         }
       } catch (cacheError) {
-        console.error('❌ Cache read error:', cacheError);
+        logger.error("Cache read error:", cacheError);
         // Fallback to Zoho
         result = await zohoCreatorAPI.getReportRecords(report_name, {
           criteria: event_id ? `Event_Info.ID == "${event_id}"` : undefined,
@@ -209,7 +210,7 @@ router.get('/read', async (req, res) => {
       });
     }
     
-    console.log(`✅ Data read successfully from ${dataSource}: ${result.data.length} records`);
+    logger.info("Data read successfully from ${dataSource}: ${result.data.length} records");
     
     res.json({
       success: true,
@@ -226,7 +227,7 @@ router.get('/read', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Read records error:', error);
+    logger.error("Read records error:", error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -265,7 +266,7 @@ router.put('/update', async (req, res) => {
   try {
     const { report_name, record_id, data, update_cache = true } = req.body;
     
-    console.log(`📝 Updating record ${record_id} in ${report_name}:`, data);
+    logger.info("Updating record ${record_id} in ${report_name}:", data);
     
     // Validate required fields
     if (!report_name || !record_id || !data) {
@@ -287,13 +288,13 @@ router.put('/update', async (req, res) => {
     }
     
     const updatedRecord = zohoResponse.data;
-    console.log(`✅ Record updated in Zoho:`, updatedRecord);
+    logger.info("Record updated in Zoho:", updatedRecord);
     
     // Update Redis cache if requested
     if (update_cache && updatedRecord) {
       try {
         await redisService.updateSingleRecord(record_id, updatedRecord);
-        console.log(`🔄 Redis cache updated for record: ${record_id}`);
+        logger.info("Redis cache updated for record: ${record_id}");
         
         // Broadcast real-time update
         await socketService.broadcastToAll('record_updated', {
@@ -304,7 +305,7 @@ router.put('/update', async (req, res) => {
         });
         
       } catch (cacheError) {
-        console.error('❌ Cache update error:', cacheError);
+        logger.error("Cache update error:", cacheError);
         // Don't fail the entire operation
       }
     }
@@ -319,7 +320,7 @@ router.put('/update', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Update record error:', error);
+    logger.error("Update record error:", error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -358,7 +359,7 @@ router.delete('/delete', async (req, res) => {
   try {
     const { report_name, record_id, event_id, update_cache = true } = req.body;
     
-    console.log(`🗑️ Deleting record ${record_id} from ${report_name}`);
+    logger.info(`🗑️ Deleting record ${record_id} from ${report_name}`);
     
     // Validate required fields
     if (!report_name || !record_id) {
@@ -379,13 +380,13 @@ router.delete('/delete', async (req, res) => {
       });
     }
     
-    console.log(`✅ Record deleted from Zoho: ${record_id}`);
+    logger.info("Record deleted from Zoho: ${record_id}");
     
     // Update Redis cache if requested
     if (update_cache) {
       try {
         await redisService.handleRecordDelete(record_id, event_id);
-        console.log(`🔄 Redis cache updated - record removed: ${record_id}`);
+        logger.info("Redis cache updated - record removed: ${record_id}");
         
         // Broadcast real-time update
         await socketService.broadcastToAll('record_deleted', {
@@ -395,7 +396,7 @@ router.delete('/delete', async (req, res) => {
         });
         
       } catch (cacheError) {
-        console.error('❌ Cache update error:', cacheError);
+        logger.error("Cache update error:", cacheError);
         // Don't fail the entire operation
       }
     }
@@ -409,7 +410,7 @@ router.delete('/delete', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Delete record error:', error);
+    logger.error("Delete record error:", error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -446,24 +447,24 @@ router.post('/bulk-sync', async (req, res) => {
   try {
     const { report_name = 'All_Registrations', event_id, force_refresh = false } = req.body;
     
-    console.log(`🔄 Starting bulk sync for ${report_name}:`, { event_id, force_refresh });
+    logger.info("Starting bulk sync for ${report_name}:", { event_id, force_refresh });
     
     let result;
     
     if (force_refresh || !await redisService.isCacheValid()) {
       // Full cache refresh
-      console.log('🔄 Performing full cache refresh...');
+      logger.info("Performing full cache refresh...");
       result = await redisService.populateFromZoho();
     } else {
       // Integrity check and conditional refresh
-      console.log('🔍 Performing integrity check...');
+      logger.info("Performing integrity check...");
       const integrityCheck = await redisService.validateCacheIntegrity();
       
       if (!integrityCheck.valid) {
-        console.log('⚠️ Cache integrity failed, refreshing...');
+        logger.info("⚠️ Cache integrity failed, refreshing...");
         result = await redisService.populateFromZoho();
       } else {
-        console.log('✅ Cache integrity OK, no refresh needed');
+        logger.info("Cache integrity OK, no refresh needed");
         result = {
           success: true,
           message: 'Cache is already up to date',
@@ -488,7 +489,7 @@ router.post('/bulk-sync', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Bulk sync error:', error);
+    logger.error("Bulk sync error:", error);
     res.status(500).json({
       success: false,
       error: 'Bulk synchronization failed',
@@ -520,7 +521,7 @@ router.get('/sync-status', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Sync status error:', error);
+    logger.error("Sync status error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get sync status',

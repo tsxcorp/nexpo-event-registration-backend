@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
@@ -109,12 +110,12 @@ router.post('/', async (req, res) => {
     // Fetch field definitions from event data for proper field_id processing
     if (eventId) {
       try {
-        console.log(`🔍 Fetching event details for field definitions: ${eventId}`);
+        logger.info("Fetching event details for field definitions: ${eventId}");
         const eventDetails = await fetchEventDetails(eventId);
         fieldDefinitions = eventDetails.event.formFields || [];
-        console.log(`📋 Found ${fieldDefinitions.length} field definitions`);
+        logger.info(`📋 Found ${fieldDefinitions.length} field definitions`);
       } catch (eventError) {
-        console.warn(`⚠️ Could not fetch event details for field processing: ${eventError.message}`);
+        logger.warn("Could not fetch event details for field processing: ${eventError.message}");
         // Continue without field definitions - will use backward compatibility mode
       }
     }
@@ -127,7 +128,7 @@ router.post('/', async (req, res) => {
     };
     
     const customFieldsData = req.body.Custom_Fields_Value || req.body.custom_fields_value;
-    console.log('📥 Registration request received:', {
+    logger.info("Registration request received:", {
       eventId,
       eventIdSource: req.query.Event_Info ? 'query.Event_Info' : 
                      req.query.event_info ? 'query.event_info' : 
@@ -163,14 +164,14 @@ router.post('/', async (req, res) => {
 
     // 🚀 REAL-TIME UPDATE: Update Redis cache and notify clients
     try {
-      console.log('🔄 Updating Redis cache with new registration...');
+      logger.info("Updating Redis cache with new registration...");
       
       // Update Redis cache with new record
       // Extract eventId from request body (since result might not have Event_Info)
       const eventId = req.body.Event_Info || req.body.event_id || result.event_id || result.Event_Info?.ID || result.Event_Info;
       const recordId = result.zoho_record_id || result.ID;
       
-      console.log('🔍 Debug result for Redis sync:', {
+      logger.info("Debug result for Redis sync:", {
         event_id: result.event_id,
         Event_Info: result.Event_Info,
         Event_Info_ID: result.Event_Info?.ID,
@@ -187,12 +188,12 @@ router.post('/', async (req, res) => {
           Event_Info: eventId
         };
         
-        console.log(`📝 Syncing new record ${recordId} to Redis for event ${eventId}`);
+        logger.info(`Syncing new record ${recordId} to Redis for event ${eventId}`);
         await redisService.updateEventRecord(eventId, enhancedResult, recordId);
         await redisService.updateCacheMetadata();
-        console.log('✅ Redis cache updated successfully');
+        logger.info("Redis cache updated successfully");
       } else {
-        console.warn('⚠️ Missing eventId or recordId, skipping Redis sync');
+        logger.warn("Missing eventId or recordId, skipping Redis sync");
       }
       
       // Broadcast to Socket.IO clients
@@ -206,16 +207,16 @@ router.post('/', async (req, res) => {
       
       socketService.pushRegistrationData(eventId, registrationData, 'new_registration');
       
-      console.log('✅ Real-time updates sent successfully');
+      logger.info("Real-time updates sent successfully");
     } catch (updateError) {
-      console.warn('⚠️ Real-time update failed (registration still successful):', updateError.message);
+      logger.warn("Real-time update failed (registration still successful):", updateError.message);
       // Don't fail the request - registration was successful
     }
 
     res.status(200).json(result); // ✅ Trả toàn bộ object gốc luôn
 
   } catch (err) {
-    console.error("❌ Zoho submission error:", err.message);
+    logger.error("Zoho submission error:", err.message);
     
     res.status(500).json({
       success: false,

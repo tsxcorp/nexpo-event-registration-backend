@@ -1,4 +1,5 @@
 const redis = require('redis');
+const logger = require('../utils/logger');
 
 /**
  * Unified Redis Service - Consolidates all Redis functionality
@@ -46,11 +47,11 @@ class RedisService {
       maxConcurrentSyncs: 3
     };
     
-    console.log('🔧 Unified Redis Service initialized');
+    logger.info('Unified Redis Service initialized');
     
     // Auto connect
     this.connect().catch(error => {
-      console.error('❌ Redis auto-connect failed:', error.message);
+      logger.error('Redis auto-connect failed:', error.message);
     });
   }
 
@@ -58,12 +59,22 @@ class RedisService {
    * Log helper with level control
    */
   log(level, message, ...args) {
-    const levels = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 };
-    const currentLevel = levels[this.logLevel] || 1;
-    const messageLevel = levels[level] || 1;
-    
-    if (messageLevel >= currentLevel) {
-      console.log(message, ...args);
+    // Use centralized logger instead of console.log
+    switch (level) {
+      case 'DEBUG':
+        logger.debug(message, ...args);
+        break;
+      case 'INFO':
+        logger.info(message, ...args);
+        break;
+      case 'WARN':
+        logger.warn(message, ...args);
+        break;
+      case 'ERROR':
+        logger.error(message, ...args);
+        break;
+      default:
+        logger.info(message, ...args);
     }
   }
 
@@ -131,7 +142,7 @@ class RedisService {
   getRedisConfig() {
     // Use REDIS_URL if available (for Redis Cloud)
     if (process.env.REDIS_URL) {
-      console.log('🔗 Using REDIS_URL from environment');
+      logger.info('Using REDIS_URL from environment');
       return {
         url: process.env.REDIS_URL,
         socket: {
@@ -151,7 +162,7 @@ class RedisService {
     }
     
     // Fallback to local Redis
-    console.log('🏠 Using local Redis fallback');
+    logger.info('Using local Redis fallback');
     return {
       host: 'localhost',
       port: 6379,
@@ -175,23 +186,23 @@ class RedisService {
     }
 
     try {
-      console.log('🔄 Connecting to Redis...');
+      logger.info('Connecting to Redis...');
       
       this.client = redis.createClient(this.config);
       
       this.client.on('error', (err) => {
-        console.error('❌ Redis Error:', err.message);
+        logger.error('Redis Error:', err.message);
         this.isConnected = false;
       });
 
       this.client.on('ready', () => {
-        console.log('✅ Redis connected and ready');
+        logger.info('Redis connected and ready');
         this.isConnected = true;
         this.retryAttempts = 0;
       });
 
       this.client.on('end', () => {
-        console.log('🔌 Redis connection ended');
+        logger.info('Redis connection ended');
         this.isConnected = false;
       });
 
@@ -202,11 +213,11 @@ class RedisService {
         )
       ]);
 
-      console.log('✅ Redis service initialized successfully');
+      logger.info('Redis service initialized successfully');
       return true;
       
     } catch (error) {
-      console.error('❌ Redis connection failed:', error.message);
+      logger.error('Redis connection failed:', error.message);
       this.isConnected = false;
       
       if (this.client) {
@@ -231,22 +242,22 @@ class RedisService {
     }
 
     try {
-      console.log('🔄 Connecting Redis subscriber...');
+      logger.info('Connecting Redis subscriber...');
       
       this.subClient = redis.createClient(this.config);
       
       this.subClient.on('error', (err) => {
-        console.error('❌ Redis Sub Error:', err.message);
+        logger.error('Redis Sub Error:', err.message);
         this.isSubConnected = false;
       });
 
       this.subClient.on('ready', () => {
-        console.log('✅ Redis subscriber connected');
+        logger.info('Redis subscriber connected');
         this.isSubConnected = true;
       });
 
       this.subClient.on('end', () => {
-        console.log('🔌 Redis subscriber connection ended');
+        logger.info('Redis subscriber connection ended');
         this.isSubConnected = false;
       });
 
@@ -257,11 +268,11 @@ class RedisService {
         )
       ]);
 
-      console.log('✅ Redis subscriber initialized successfully');
+      logger.info('Redis subscriber initialized successfully');
       return true;
       
     } catch (error) {
-      console.error('❌ Redis subscriber connection failed:', error.message);
+      logger.error('Redis subscriber connection failed:', error.message);
       this.isSubConnected = false;
       
       if (this.subClient) {
@@ -290,9 +301,9 @@ class RedisService {
       }
       this.isConnected = false;
       this.isSubConnected = false;
-      console.log('✅ Redis disconnected');
+      logger.info('Redis disconnected');
     } catch (error) {
-      console.error('❌ Redis disconnect error:', error.message);
+      logger.error('Redis disconnect error:', error.message);
     }
   }
 

@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
 const socketService = require('../services/socketService');
@@ -44,11 +45,11 @@ router.get('/registrations/:eventId', async (req, res) => {
     const { eventId } = req.params;
     const { status = 'all', group_only = false, limit = 10000 } = req.query;
     
-    console.log(`🎯 Event filtering request: Event=${eventId}, Status=${status}, GroupOnly=${group_only}`);
+    logger.info(`🎯 Event filtering request: Event=${eventId}, Status=${status}, GroupOnly=${group_only}`);
 
     // Get ALL registrations using direct Zoho Creator API with full pagination 
     const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
-    console.log(`🔄 Fetching ALL registrations with full pagination...`);
+    logger.info("Fetching ALL registrations with full pagination...");
     const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
       max_records: 1000,
       fetchAll: true,
@@ -63,7 +64,7 @@ router.get('/registrations/:eventId', async (req, res) => {
       return record.Event_Info.ID === eventId;
     });
 
-    console.log(`📊 Found ${filteredByEvent.length} registrations for event ${eventId}`);
+    logger.info("Found ${filteredByEvent.length} registrations for event ${eventId}");
 
     // Apply status filter
     if (status !== 'all') {
@@ -119,7 +120,7 @@ router.get('/registrations/:eventId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Event filtering error:', error);
+    logger.error("Event filtering error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to filter registrations by event',
@@ -140,11 +141,11 @@ router.get('/registrations/:eventId', async (req, res) => {
  */
 router.get('/events/list', async (req, res) => {
   try {
-    console.log('📋 Getting all events with registration counts...');
+    logger.info('📋 Getting all events with registration counts...');
 
     // Get ALL registrations using direct Zoho Creator API with full pagination
     const zohoCreatorAPI = require('../utils/zohoCreatorAPI');
-    console.log(`🔄 Fetching ALL registrations for events list...`);
+    logger.info("Fetching ALL registrations for events list...");
     const allRegistrations = await zohoCreatorAPI.getReportRecords('All_Registrations', {
       max_records: 1000,
       fetchAll: true,
@@ -216,7 +217,7 @@ router.get('/events/list', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Event list error:', error);
+    logger.error("Event list error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get event list',
@@ -268,7 +269,7 @@ router.post('/realtime/subscribe/:eventId', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Real-time subscription error:', error);
+    logger.error("Real-time subscription error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to subscribe to real-time updates',

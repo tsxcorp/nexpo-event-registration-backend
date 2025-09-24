@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 // redisService removed - functionality integrated into redisService
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
@@ -34,7 +35,7 @@ router.get('/status', async (req, res) => {
       nextRetry: limitResetTime ? new Date(limitResetTime.getTime() + 24 * 60 * 60 * 1000).toISOString() : null
     });
   } catch (error) {
-    console.error('❌ Error getting buffer status:', error);
+    logger.error("Error getting buffer status:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get buffer status',
@@ -71,7 +72,7 @@ router.get('/submissions', async (req, res) => {
       count: submissions.length
     });
   } catch (error) {
-    console.error('❌ Error getting buffered submissions:', error);
+    logger.error("Error getting buffered submissions:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get buffered submissions',
@@ -92,7 +93,7 @@ router.get('/submissions', async (req, res) => {
  */
 router.post('/retry', async (req, res) => {
   try {
-    console.log('🔄 Manual retry queue processing triggered');
+    logger.info("Manual retry queue processing triggered");
     
     const result = await redisService.processRetryQueue(submitRegistration);
     
@@ -101,7 +102,7 @@ router.post('/retry', async (req, res) => {
       ...result
     });
   } catch (error) {
-    console.error('❌ Error processing retry queue:', error);
+    logger.error("Error processing retry queue:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to process retry queue',
@@ -122,7 +123,7 @@ router.post('/retry', async (req, res) => {
  */
 router.post('/cleanup', async (req, res) => {
   try {
-    console.log('🧹 Manual cleanup triggered');
+    logger.info("🧹 Manual cleanup triggered");
     
     const result = await redisService.cleanupCompleted();
     
@@ -131,7 +132,7 @@ router.post('/cleanup', async (req, res) => {
       ...result
     });
   } catch (error) {
-    console.error('❌ Error cleaning up buffer:', error);
+    logger.error("Error cleaning up buffer:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to cleanup buffer',
@@ -175,7 +176,7 @@ router.get('/submissions/:bufferId', async (req, res) => {
       submission
     });
   } catch (error) {
-    console.error('❌ Error getting submission:', error);
+    logger.error("Error getting submission:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get submission',
@@ -221,7 +222,7 @@ router.post('/submissions/:bufferId/retry', async (req, res) => {
       });
     }
     
-    console.log(`🔄 Manual retry for submission ${bufferId}`);
+    logger.info("Manual retry for submission ${bufferId}");
     
     // Update status to processing
     await redisService.updateSubmissionStatus(bufferId, 'processing');
@@ -250,7 +251,7 @@ router.post('/submissions/:bufferId/retry', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ Error retrying submission:', error);
+    logger.error("Error retrying submission:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to retry submission',

@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const axios = require('axios');
 const https = require('https');
 const { exec } = require('child_process');
@@ -10,7 +11,7 @@ const router = express.Router();
  */
 router.get('/', async (req, res) => {
   try {
-    console.log('🔍 Fetching group visitors from custom Zoho API...');
+    logger.info("Fetching group visitors from custom Zoho API...");
     
     // Get query parameters
     const { event_id, group_id, grp_id, limit } = req.query;
@@ -25,10 +26,10 @@ router.get('/', async (req, res) => {
     if (grp_id) params.grp_id = grp_id; // Direct grp_id parameter
     if (limit) params.limit = limit;
     
-    console.log('📋 API params:', params);
+    logger.info('📋 API params:', params);
     
-    console.log('📡 Making request to:', 'https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors');
-    console.log('📋 Request params:', params);
+    logger.info('📡 Making request to:', 'https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors');
+    logger.info('📋 Request params:', params);
     
     // Use axios with same config as zohoVisitorUtils.js
     const response = await axios.get('https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors', {
@@ -38,16 +39,16 @@ router.get('/', async (req, res) => {
       responseType: 'text' // 🛑 tránh mất số khi parse
     });
     
-    console.log('📋 Raw response:', response.data);
+    logger.info('📋 Raw response:', response.data);
     
     // Parse response like zohoVisitorUtils.js
     const data = JSON.parse(response.data);
-    console.log('📋 Parsed response data:', JSON.stringify(data, null, 2));
+    logger.info('📋 Parsed response data:', JSON.stringify(data, null, 2));
     
     // Update response object to match expected structure
     response.data = data;
     
-    console.log(`✅ Group visitors fetched successfully: ${response.data.result?.length || 0} visitors`);
+    logger.info("Group visitors fetched successfully: ${response.data.result?.length || 0} visitors");
     
     res.json({
       success: true,
@@ -57,7 +58,7 @@ router.get('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error fetching group visitors:', error.response?.data || error.message);
+    logger.error("Error fetching group visitors:", error.response?.data || error.message);
     
     res.status(500).json({
       success: false,
@@ -74,7 +75,7 @@ router.get('/', async (req, res) => {
 router.get('/:groupId', async (req, res) => {
   try {
     const { groupId } = req.params;
-    console.log(`🔍 Fetching group visitors for group: ${groupId}`);
+    logger.info("Fetching group visitors for group: ${groupId}");
     
     const response = await axios.get('https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors', {
       headers: {
@@ -88,7 +89,7 @@ router.get('/:groupId', async (req, res) => {
     // Filter by group_id
     const groupVisitors = response.data.result.filter(visitor => visitor.group_id === groupId);
     
-    console.log(`✅ Group visitors for ${groupId}: ${groupVisitors.length} visitors`);
+    logger.info("Group visitors for ${groupId}: ${groupVisitors.length} visitors");
     
     res.json({
       success: true,
@@ -99,7 +100,7 @@ router.get('/:groupId', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error fetching group visitors:', error.response?.data || error.message);
+    logger.error("Error fetching group visitors:", error.response?.data || error.message);
     
     res.status(500).json({
       success: false,
@@ -116,7 +117,7 @@ router.get('/:groupId', async (req, res) => {
 router.get('/event/:eventId', async (req, res) => {
   try {
     const { eventId } = req.params;
-    console.log(`🔍 Fetching group visitors for event: ${eventId}`);
+    logger.info("Fetching group visitors for event: ${eventId}");
     
     const response = await axios.get('https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors', {
       headers: {
@@ -130,7 +131,7 @@ router.get('/event/:eventId', async (req, res) => {
     // Filter by event_id
     const eventGroupVisitors = response.data.result.filter(visitor => visitor.event_id === eventId);
     
-    console.log(`✅ Group visitors for event ${eventId}: ${eventGroupVisitors.length} visitors`);
+    logger.info("Group visitors for event ${eventId}: ${eventGroupVisitors.length} visitors");
     
     res.json({
       success: true,
@@ -141,7 +142,7 @@ router.get('/event/:eventId', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error fetching group visitors:', error.response?.data || error.message);
+    logger.error("Error fetching group visitors:", error.response?.data || error.message);
     
     res.status(500).json({
       success: false,
@@ -158,7 +159,7 @@ router.get('/event/:eventId', async (req, res) => {
 router.get('/head/:groupId', async (req, res) => {
   try {
     const { groupId } = req.params;
-    console.log(`🔍 Fetching head visitor for group: ${groupId}`);
+    logger.info("Fetching head visitor for group: ${groupId}");
     
     const response = await axios.get('https://www.zohoapis.com/creator/custom/tsxcorp/getGroupVisitors', {
       headers: {
@@ -175,7 +176,7 @@ router.get('/head/:groupId', async (req, res) => {
     );
     
     if (headVisitor) {
-      console.log(`✅ Head visitor found for group ${groupId}: ${headVisitor.full_name}`);
+      logger.info("Head visitor found for group ${groupId}: ${headVisitor.full_name}");
       
       res.json({
         success: true,
@@ -184,7 +185,7 @@ router.get('/head/:groupId', async (req, res) => {
         timestamp: new Date().toISOString()
       });
     } else {
-      console.log(`⚠️ No head visitor found for group ${groupId}`);
+      logger.info("⚠️ No head visitor found for group ${groupId}");
       
       res.status(404).json({
         success: false,
@@ -195,7 +196,7 @@ router.get('/head/:groupId', async (req, res) => {
     }
     
   } catch (error) {
-    console.error('❌ Error fetching head visitor:', error.response?.data || error.message);
+    logger.error("Error fetching head visitor:", error.response?.data || error.message);
     
     res.status(500).json({
       success: false,

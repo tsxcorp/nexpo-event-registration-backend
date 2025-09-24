@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const redisService = require('../services/redisService');
 
@@ -64,14 +65,14 @@ router.post('/zoho-sync', async (req, res) => {
         }
         record = JSON.parse(jsonString);
       } catch (e) {
-        console.log('⚠️ Could not parse record as JSON:', record);
-        console.log('⚠️ Parse error:', e.message);
+        logger.info("⚠️ Could not parse record as JSON:", record);
+        logger.info("⚠️ Parse error:", e.message);
         // If JSON parsing fails, try to create a basic record object
         record = { ID: record_id };
       }
     }
 
-    console.log('🪝 Zoho webhook received:', {
+    logger.info("🪝 Zoho webhook received:", {
       event,
       form,
       record_id,
@@ -91,7 +92,7 @@ router.post('/zoho-sync', async (req, res) => {
     const eventId = record?.Event_Info?.ID || record?.event_id;
 
     if (!eventId) {
-      console.log('⚠️ No event_id found in record:', record);
+      logger.info("⚠️ No event_id found in record:", record);
       return res.status(400).json({
         success: false,
         message: 'No event_id found in record',
@@ -120,7 +121,7 @@ router.post('/zoho-sync', async (req, res) => {
         break;
 
       default:
-        console.log('⚠️ Unknown event type:', event);
+        logger.info("⚠️ Unknown event type:", event);
         return res.status(400).json({
           success: false,
           message: 'Unknown event type'
@@ -130,7 +131,7 @@ router.post('/zoho-sync', async (req, res) => {
     // Update cache metadata
     await redisService.updateCacheMetadata();
 
-    console.log(`✅ Webhook processed: ${action} record ${record_id} for event ${eventId}`);
+    logger.info("Webhook processed: ${action} record ${record_id} for event ${eventId}");
 
     res.status(200).json({
       success: true,
@@ -141,7 +142,7 @@ router.post('/zoho-sync', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Webhook processing error:', error);
+    logger.error("Webhook processing error:", error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',

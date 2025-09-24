@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const multer = require('multer');
 const { parseExcel } = require('../utils/parseExcel');
 const { submitRegistration } = require('../utils/zohoRegistrationSubmit');
@@ -22,7 +23,7 @@ setInterval(() => {
   }
   
   if (cleanedCount > 0) {
-    console.log(`🧹 Cleaned up ${cleanedCount} old import sessions`);
+    logger.info("🧹 Cleaned up ${cleanedCount} old import sessions");
   }
 }, 30 * 60 * 1000); // Check every 30 minutes
 
@@ -43,7 +44,7 @@ const updateImportSession = (sessionId, eventId, data) => {
   const session = importSessions.get(sessionId);
   Object.assign(session, data, { lastUpdate: Date.now() });
   
-  console.log(`📊 Session ${sessionId} updated:`, {
+  logger.info("Session ${sessionId} updated:", {
     processed: session.processedRecords.length,
     total: session.totalRecords,
     currentRecord: session.currentRecord,
@@ -53,7 +54,7 @@ const updateImportSession = (sessionId, eventId, data) => {
 
 // 📊 Helper function to show payload comparison
 const showPayloadComparison = (importPayload, rowIndex) => {
-  console.log(`\n🔍 PAYLOAD COMPARISON for row ${rowIndex}:`);
+  logger.info("\n🔍 PAYLOAD COMPARISON for row ${rowIndex}:");
   
   // Simulate what registration route would create (now both use same format!)
   const registrationEquivalent = {
@@ -65,12 +66,12 @@ const showPayloadComparison = (importPayload, rowIndex) => {
     event_info: importPayload.event_info
   };
   
-  console.log("📱 Registration route format:", JSON.stringify(registrationEquivalent, null, 2));
-  console.log("📄 Import route format:", JSON.stringify(importPayload, null, 2));
+  logger.info("📱 Registration route format:", JSON.stringify(registrationEquivalent, null, 2));
+  logger.info("📄 Import route format:", JSON.stringify(importPayload, null, 2));
   
   // Show what zohoRegistrationSubmit.js would process each into (REST API format)
-  console.log("\n💡 After zohoRegistrationSubmit.js processing (REST API):");
-  console.log("📱 Registration → Zoho REST API:", {
+  logger.info("\n💡 After zohoRegistrationSubmit.js processing (REST API):");
+  logger.info("📱 Registration → Zoho REST API:", {
     Full_Name: registrationEquivalent.full_name,
     Email: registrationEquivalent.email,
     Phone_Number: registrationEquivalent.mobile_number,
@@ -79,7 +80,7 @@ const showPayloadComparison = (importPayload, rowIndex) => {
     Group_Members: "[]"
   });
   
-  console.log("📄 Import → Zoho REST API:", {
+  logger.info("📄 Import → Zoho REST API:", {
     Full_Name: importPayload.full_name,
     Email: importPayload.email,
     Phone_Number: importPayload.mobile_number,
@@ -87,7 +88,7 @@ const showPayloadComparison = (importPayload, rowIndex) => {
     Custom_Fields_Value: importPayload.custom_fields_value,
     Group_Members: JSON.stringify(importPayload.group_members)
   });
-  console.log("=".repeat(50));
+  logger.info("=".repeat(50));
 };
 
 /**
@@ -142,13 +143,13 @@ router.post('/', upload.single('file'), async (req, res) => {
     
     // Get session ID from header for tracking
     const sessionId = req.headers['x-session-id'];
-    console.log(`📊 Import request with session ID: ${sessionId}`);
+    logger.info("Import request with session ID: ${sessionId}");
     
-    console.log(`📄 Processing import for event: ${eventId}, file size: ${req.file.buffer.length} bytes`);
-    console.log('🔧 Using Zoho Public REST API for imports');
+    logger.info(`📄 Processing import for event: ${eventId}, file size: ${req.file.buffer.length} bytes`);
+    logger.info('🔧 Using Zoho Public REST API for imports');
     
     const records = parseExcel(req.file.buffer);
-    console.log(`📋 Parsed ${records.length} records from Excel`);
+    logger.info(`📋 Parsed ${records.length} records from Excel`);
 
     // Initialize session tracking if sessionId provided
     if (sessionId) {
@@ -180,7 +181,7 @@ router.post('/', upload.single('file'), async (req, res) => {
         fieldDefinitions: [] // Import doesn't have field definitions
       };
 
-      console.log(`📤 Import payload for row ${i + 1}:`, JSON.stringify(payload, null, 2));
+      logger.info("Import payload for row ${i + 1}:", JSON.stringify(payload, null, 2));
       
       // Show comparison with registration format
       showPayloadComparison(payload, i + 1);
@@ -191,7 +192,7 @@ router.post('/', upload.single('file'), async (req, res) => {
 
       while (attempt <= RETRY_LIMIT) {
         try {
-          console.log(`🔄 Attempt ${attempt + 1} for row ${i + 1}...`);
+          logger.info("Attempt ${attempt + 1} for row ${i + 1}...");
           
           // Update session tracking
           if (sessionId) {
@@ -201,7 +202,7 @@ router.post('/', upload.single('file'), async (req, res) => {
           }
           
           const result = await submitRegistration(payload);
-          console.log(`✅ Row ${i + 1} success:`, result);
+          logger.info("Row ${i + 1} success:", result);
           
           // Update session with success
           if (sessionId) {
@@ -219,7 +220,7 @@ router.post('/', upload.single('file'), async (req, res) => {
           break;
         } catch (err) {
           lastError = err?.message || 'Unknown error';
-          console.error(`❌ Row ${i + 1} attempt ${attempt + 1} failed:`, lastError);
+          logger.error("Row ${i + 1} attempt ${attempt + 1} failed:", lastError);
           
           // Update session with error
           if (sessionId) {
@@ -234,7 +235,7 @@ router.post('/', upload.single('file'), async (req, res) => {
           
           attempt++;
           if (attempt <= RETRY_LIMIT) {
-            console.log(`⏳ Waiting ${DELAY_BETWEEN_REQUESTS}ms before retry...`);
+            logger.info("⏳ Waiting ${DELAY_BETWEEN_REQUESTS}ms before retry...");
             await sleep(DELAY_BETWEEN_REQUESTS);
           }
         }
@@ -246,7 +247,7 @@ router.post('/', upload.single('file'), async (req, res) => {
       
       // Add delay between records to avoid overwhelming Zoho
       if (i < records.length - 1) { // Don't delay after the last record
-        console.log(`⏳ Waiting ${DELAY_BETWEEN_REQUESTS}ms before next record...`);
+        logger.info("⏳ Waiting ${DELAY_BETWEEN_REQUESTS}ms before next record...");
         await sleep(DELAY_BETWEEN_REQUESTS);
       }
     }
@@ -256,12 +257,12 @@ router.post('/', upload.single('file'), async (req, res) => {
       updateImportSession(sessionId, eventId, {
         status: 'completed'
       });
-      console.log(`✅ Import session ${sessionId} completed`);
+      logger.info("Import session ${sessionId} completed");
     }
 
     res.json({ success: true, total: records.length, report: results });
   } catch (error) {
-    console.error("❌ Import error:", error);
+    logger.error("Import error:", error);
     res.status(500).json({ error: "Failed to import file", details: error.message });
   }
 });
@@ -372,7 +373,7 @@ router.get('/import-status/:eventId', async (req, res) => {
     const { eventId } = req.params;
     const { sessionId } = req.query;
     
-    console.log(`📊 Status request for event ${eventId}, session ${sessionId}`);
+    logger.info("Status request for event ${eventId}, session ${sessionId}");
     
     if (!sessionId) {
       return res.status(400).json({ 
@@ -422,7 +423,7 @@ router.get('/import-status/:eventId', async (req, res) => {
       }
     };
     
-    console.log(`📊 Status response for session ${sessionId}:`, {
+    logger.info("Status response for session ${sessionId}:", {
       processed: response.status.processed,
       total: response.status.total,
       completed: response.completed
@@ -431,7 +432,7 @@ router.get('/import-status/:eventId', async (req, res) => {
     res.json(response);
     
   } catch (error) {
-    console.error('❌ Error in import status endpoint:', error);
+    logger.error("Error in import status endpoint:", error);
     res.status(500).json({ 
       error: 'Internal server error',
       message: error.message 

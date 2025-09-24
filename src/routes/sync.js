@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 // redisService removed - functionality integrated into redisService
 
@@ -27,7 +28,7 @@ router.post('/start', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error starting sync:', error);
+    logger.error("Error starting sync:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to start synchronization',
@@ -53,7 +54,7 @@ router.post('/stop', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error stopping sync:', error);
+    logger.error("Error stopping sync:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to stop synchronization',
@@ -78,7 +79,7 @@ router.get('/status', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error getting sync status:', error);
+    logger.error("Error getting sync status:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get sync status',
@@ -104,7 +105,7 @@ router.post('/trigger-full', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error triggering full sync:', error);
+    logger.error("Error triggering full sync:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to trigger full synchronization',
@@ -154,7 +155,7 @@ router.post('/add-event', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error adding event to sync:', error);
+    logger.error("Error adding event to sync:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to add event to sync monitoring',
@@ -199,7 +200,7 @@ router.delete('/remove-event', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error removing event from sync:', error);
+    logger.error("Error removing event from sync:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to remove event from sync monitoring',

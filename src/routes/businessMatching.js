@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { 
   submitBusinessMatching, 
@@ -48,16 +49,16 @@ const {
 
 router.post('/submit', async (req, res) => {
   try {
-    console.log('📥 Business matching submit request received:', req.body);
+    logger.info("Business matching submit request received:", req.body);
 
     // Format the input data
     const formattedData = formatBusinessMatchingData(req.body);
-    console.log('🔧 Formatted business matching data:', formattedData);
+    logger.info('🔧 Formatted business matching data:', formattedData);
 
     // Validate the data
     const validation = validateBusinessMatchingData(formattedData);
     if (!validation.isValid) {
-      console.log('❌ Validation failed:', validation.errors);
+      logger.info("❌ Validation failed:", validation.errors);
       return res.status(400).json({
         success: false,
         message: 'Validation error',
@@ -71,7 +72,7 @@ router.post('/submit', async (req, res) => {
     // Generate a matching ID for tracking
     const matchingId = `MTG-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     
-    console.log('✅ Business matching submitted successfully:', {
+    logger.info("Business matching submitted successfully:", {
       matchingId,
       zohoResponse
     });
@@ -92,7 +93,7 @@ router.post('/submit', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('💥 Error in business matching submit:', error);
+    logger.error("Error in business matching submit:", error);
     
     res.status(500).json({
       success: false,

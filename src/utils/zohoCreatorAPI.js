@@ -1,4 +1,5 @@
 const axios = require('axios');
+const logger = require('./logger');
 const zohoOAuthService = require('./zohoOAuthService');
 const redisService = require('../services/redisService');
 const socketService = require('../services/socketService');
@@ -43,12 +44,12 @@ class ZohoCreatorAPI {
         config.data = data;
       }
 
-      console.log(`📡 Making ${method.toUpperCase()} request to:`, url);
-      console.log('📋 Params:', params);
+      logger.info(`📡 Making ${method.toUpperCase()} request to:`, url);
+      logger.info('📋 Params:', params);
       
       const response = await axios(config);
       
-      console.log('✅ API request successful');
+      logger.info("API request successful");
       return response.data;
     });
   }
@@ -97,11 +98,11 @@ class ZohoCreatorAPI {
     if (useCache && redisService.isReady()) {
       cached = await redisService.getCachedZohoData(reportLinkName, params);
       if (cached) {
-        console.log(`📦 Returning cached data for report: ${reportLinkName}`);
+        logger.info(`Returning cached data for report: ${reportLinkName}`);
         return {
           ...cached.data,
           metadata: {
-            ...cached.data.metadata,
+            ...(cached.data.metadata || {}),
             cached: true,
             cached_at: cached.cached_at
           }
@@ -109,13 +110,13 @@ class ZohoCreatorAPI {
       }
     }
 
-        console.log(`📊 Getting records from report: ${reportLinkName} (max_records: ${max_records})`);
+    logger.info(`Getting records from report: ${reportLinkName} (max_records: ${max_records})`);
 
     // Set up headers for v2.1 API
     const headers = {};
     if (record_cursor) {
       headers.record_cursor = record_cursor;
-      console.log(`🔄 Using pagination cursor: ${record_cursor}`);
+      logger.info(`Using pagination cursor: ${record_cursor}`);
     }
 
     let allData = [];
@@ -125,7 +126,7 @@ class ZohoCreatorAPI {
 
     // If fetchAll is true, automatically paginate through all records
     if (fetchAll) {
-      console.log(`🔄 Fetching ALL records from ${reportLinkName}...`);
+      logger.info(`Fetching ALL records from ${reportLinkName}...`);
       
       while (hasMore && totalFetched < 200000) { // Very high safety limit for extremely large datasets
         try {
@@ -144,7 +145,7 @@ class ZohoCreatorAPI {
           // Add cursor header if we have one
           if (currentCursor) {
             config.headers.record_cursor = currentCursor;
-            console.log(`🔄 Using cursor: ${currentCursor.substring(0, 20)}...`);
+            logger.info(`Using cursor: ${currentCursor.substring(0, 20)}...`);
           }
           
           const response = await axios(config);
@@ -152,29 +153,29 @@ class ZohoCreatorAPI {
           if (response.data?.data && response.data.data.length > 0) {
             allData.push(...response.data.data);
             totalFetched += response.data.data.length;
-            console.log(`📦 Fetched batch: ${response.data.data.length} records (total: ${totalFetched})`);
+            logger.info(`Fetched batch: ${response.data.data.length} records (total: ${totalFetched})`);
             
             // Check for next cursor in response headers
             currentCursor = response.headers?.record_cursor || response.headers?.['record_cursor'];
             hasMore = !!currentCursor; // Continue as long as there's a cursor, regardless of batch size
             
             if (currentCursor) {
-              console.log(`🔄 Next cursor found: ${currentCursor.substring(0, 20)}..., continuing`);
+              logger.info(`Next cursor found: ${currentCursor.substring(0, 20)}..., continuing`);
             } else {
-              console.log(`✅ No more cursor, pagination complete`);
+              logger.info("No more cursor, pagination complete");
             }
           } else {
-            console.log(`📄 No more data returned, stopping pagination`);
+            logger.info(`📄 No more data returned, stopping pagination`);
             hasMore = false;
           }
         } catch (error) {
-          console.error(`❌ Error fetching batch at cursor ${currentCursor}:`, error.message);
-          console.error(`❌ Full error:`, error.response?.data || error);
+          logger.error("Error fetching batch at cursor ${currentCursor}:", error.message);
+          logger.error("Full error:", error.response?.data || error);
           hasMore = false;
         }
       }
 
-      console.log(`✅ Total records fetched: ${totalFetched}`);
+      logger.info(`Total records fetched: ${totalFetched}`);
     } else {
       // Single request
       const response = await this.makeRequest('GET', `report/${reportLinkName}`, null, params, headers);
@@ -218,7 +219,7 @@ class ZohoCreatorAPI {
    * @returns {Object} Record data
    */
   async getRecord(reportLinkName, recordId) {
-    console.log(`📋 Getting record ${recordId} from report: ${reportLinkName}`);
+    logger.info(`📋 Getting record ${recordId} from report: ${reportLinkName}`);
     
     const response = await this.makeRequest('GET', `report/${reportLinkName}/${recordId}`);
     
@@ -236,7 +237,7 @@ class ZohoCreatorAPI {
    * @returns {Object} Created record response
    */
   async createRecord(formLinkName, recordData) {
-    console.log(`📝 Creating record in form: ${formLinkName}`);
+    logger.info(`Creating record in form: ${formLinkName}`);
     
     const response = await this.makeRequest('POST', `form/${formLinkName}`, {
       data: recordData
@@ -258,7 +259,7 @@ class ZohoCreatorAPI {
    * @returns {Object} Update response
    */
   async updateRecord(reportLinkName, recordId, updateData) {
-    console.log(`✏️ Updating record ${recordId} in report: ${reportLinkName}`);
+    logger.info("✏️ Updating record ${recordId} in report: ${reportLinkName}");
     
     const response = await this.makeRequest('PATCH', `report/${reportLinkName}/${recordId}`, {
       data: updateData
@@ -279,7 +280,7 @@ class ZohoCreatorAPI {
    * @returns {Object} Delete response
    */
   async deleteRecord(reportLinkName, recordId) {
-    console.log(`🗑️ Deleting record ${recordId} from report: ${reportLinkName}`);
+    logger.info(`🗑️ Deleting record ${recordId} from report: ${reportLinkName}`);
     
     await this.makeRequest('DELETE', `report/${reportLinkName}/${recordId}`);
     
@@ -296,7 +297,7 @@ class ZohoCreatorAPI {
    * @returns {Object} Form metadata
    */
   async getFormMetadata(formLinkName) {
-    console.log(`📋 Getting metadata for form: ${formLinkName}`);
+    logger.info(`📋 Getting metadata for form: ${formLinkName}`);
     
     const response = await this.makeRequest('GET', `meta/form/${formLinkName}`);
     
@@ -322,8 +323,8 @@ class ZohoCreatorAPI {
       sortOrder = 'asc'
     } = options;
 
-    console.log(`🔍 Searching records in report: ${reportLinkName}`);
-    console.log('🔍 Search criteria:', searchCriteria);
+    logger.info(`Searching records in report: ${reportLinkName}`);
+    logger.info("Search criteria:", searchCriteria);
     
     return await this.getReportRecords(reportLinkName, {
       from,
@@ -342,7 +343,7 @@ class ZohoCreatorAPI {
    * @returns {Object} Bulk operation results
    */
   async bulkOperation(operation, targetName, records) {
-    console.log(`📦 Performing bulk ${operation} operation on ${records.length} records`);
+    logger.info(`Performing bulk ${operation} operation on ${records.length} records`);
     
     const results = {
       success: [],
@@ -373,7 +374,7 @@ class ZohoCreatorAPI {
       }
     }
 
-    console.log(`✅ Bulk operation completed: ${results.success.length} success, ${results.failed.length} failed`);
+    logger.info(`Bulk operation completed: ${results.success.length} success, ${results.failed.length} failed`);
     
     return {
       success: true,

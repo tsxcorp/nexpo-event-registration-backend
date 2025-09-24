@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const zohoOAuthService = require('../utils/zohoOAuthService');
 
@@ -77,8 +78,8 @@ router.get('/zoho/authorize', (req, res) => {
   try {
     const authorizationUrl = zohoOAuthService.getAuthorizationUrl();
     
-    console.log('🔍 DEBUG - Current redirectUri:', zohoOAuthService.config.redirectUri);
-    console.log('🔍 DEBUG - Generated URL:', authorizationUrl);
+    logger.info("DEBUG - Current redirectUri:", zohoOAuthService.config.redirectUri);
+    logger.info("DEBUG - Generated URL:", authorizationUrl);
     
     res.json({
       success: true,
@@ -96,7 +97,7 @@ router.get('/zoho/authorize', (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Error generating authorization URL:', error);
+    logger.error("Error generating authorization URL:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to generate authorization URL',
@@ -149,7 +150,7 @@ router.post('/zoho/token', async (req, res) => {
       });
     }
     
-    console.log('🔑 Exchanging authorization code for tokens...');
+    logger.info('🔑 Exchanging authorization code for tokens...');
     const tokenResponse = await zohoOAuthService.getAccessToken(code);
     
     res.json({
@@ -163,7 +164,7 @@ router.post('/zoho/token', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error getting access token:', error);
+    logger.error("Error getting access token:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to exchange code for tokens',
@@ -193,7 +194,7 @@ router.post('/zoho/token', async (req, res) => {
  */
 router.post('/zoho/refresh', async (req, res) => {
   try {
-    console.log('🔄 Refreshing access token...');
+    logger.info("Refreshing access token...");
     const tokenResponse = await zohoOAuthService.refreshAccessToken();
     
     res.json({
@@ -202,7 +203,7 @@ router.post('/zoho/refresh', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error refreshing token:', error);
+    logger.error("Error refreshing token:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to refresh token',
@@ -246,7 +247,7 @@ router.get('/zoho/status', (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error getting token status:', error);
+    logger.error("Error getting token status:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get token status',
@@ -288,7 +289,7 @@ router.post('/zoho/clear', (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error clearing tokens:', error);
+    logger.error("Error clearing tokens:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to clear tokens',
@@ -391,7 +392,7 @@ curl -X POST http://localhost:3000/api/auth/zoho/token \\
  */
 router.post('/zoho/reload-tokens', async (req, res) => {
   try {
-    console.log('🔄 Force reloading tokens from file...');
+    logger.info("Force reloading tokens from file...");
     
     // Force reload from file
     const fs = require('fs');
@@ -401,7 +402,7 @@ router.post('/zoho/reload-tokens', async (req, res) => {
     if (fs.existsSync(tokenFile)) {
       const tokens = JSON.parse(fs.readFileSync(tokenFile, 'utf8'));
       zohoOAuthService.setTokens(tokens);
-      console.log('✅ Tokens reloaded from file successfully');
+      logger.info("Tokens reloaded from file successfully");
       
       res.json({
         success: true,
@@ -416,7 +417,7 @@ router.post('/zoho/reload-tokens', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Error reloading tokens:', error);
+    logger.error("Error reloading tokens:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to reload tokens',

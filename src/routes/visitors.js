@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { fetchVisitorDetails, submitCheckin } = require('../utils/zohoVisitorUtils');
 const socketService = require('../services/socketService');
@@ -213,8 +214,8 @@ const fetchGroupVisitors = async (groupId) => {
   const publicKey = 'yNCkueSrUthmff4ZKzKUAwjJu';
   
   try {
-    console.log("🔍 Fetching group visitors from:", apiUrl);
-    console.log("📋 Parameters:", {
+    logger.info("Fetching group visitors from:", apiUrl);
+    logger.info("📋 Parameters:", {
       visid: groupId,
       publickey: publicKey ? "***" + publicKey.slice(-4) : "NOT_SET"
     });
@@ -229,7 +230,7 @@ const fetchGroupVisitors = async (groupId) => {
       responseType: 'text' // 🛑 tránh mất số khi parse
     });
 
-    console.log("📤 Raw Zoho response:", response.data);
+    logger.info("Raw Zoho response:", response.data);
 
     const data = JSON.parse(response.data, (key, value) => {
       if (key === 'id' && typeof value === 'number') {
@@ -238,11 +239,11 @@ const fetchGroupVisitors = async (groupId) => {
       return value;
     });
 
-    console.log("📊 Parsed Zoho data:", JSON.stringify(data, null, 2));
+    logger.info("Parsed Zoho data:", JSON.stringify(data, null, 2));
 
     // Check if API returned error
     if (data?.code && data.code !== 3000) {
-      console.error("❌ Zoho API returned error code:", data?.code);
+      logger.error("Zoho API returned error code:", data?.code);
       throw new Error(`Zoho API error: ${data?.message || 'Unknown error'} (Code: ${data?.code})`);
     }
 
@@ -261,13 +262,13 @@ const fetchGroupVisitors = async (groupId) => {
       }
     }
     
-    console.log("✅ Group visitors fetched successfully:", visitors.length, "visitors");
-    console.log("📋 First visitor sample:", JSON.stringify(visitors[0], null, 2));
+    logger.info("Group visitors fetched successfully:", visitors.length, "visitors");
+    logger.info("📋 First visitor sample:", JSON.stringify(visitors[0], null, 2));
     return visitors;
 
   } catch (err) {
-    console.error("❌ Error in fetchGroupVisitors:", err.message);
-    console.error("❌ Error stack:", err.stack);
+    logger.error("Error in fetchGroupVisitors:", err.message);
+    logger.error("Error stack:", err.stack);
     throw err;
   }
 };
@@ -278,10 +279,10 @@ router.get('/', async (req, res) => {
 
   try {
     // 🔍 Check if visitorId contains "GRP" - if so, fetch group visitors
-    console.log("🔍 Checking visitorId:", visitorId, "contains GRP:", visitorId.includes('GRP'));
+    logger.info("Checking visitorId:", visitorId, "contains GRP:", visitorId.includes('GRP'));
     
     if (visitorId.includes('GRP')) {
-      console.log("🔍 Detected group ID, fetching group visitors:", visitorId);
+      logger.info("Detected group ID, fetching group visitors:", visitorId);
       
       try {
         const groupVisitors = await fetchGroupVisitors(visitorId);
@@ -297,7 +298,7 @@ router.get('/', async (req, res) => {
               customFields = visitorData.custom_fields_value;
             }
           } catch (parseError) {
-            console.warn("⚠️ Failed to parse custom_fields_value:", parseError.message);
+            logger.warn("Failed to parse custom_fields_value:", parseError.message);
             customFields = visitorData.custom_fields_value || {};
           }
 
@@ -329,25 +330,25 @@ router.get('/', async (req, res) => {
           };
         });
         
-        console.log("✅ Group visitors data fetched successfully for ID:", visitorId);
+        logger.info("Group visitors data fetched successfully for ID:", visitorId);
         res.status(200).json({ visitors, count: visitors.length });
         
       } catch (groupError) {
-        console.error("❌ Error fetching group visitors:", groupError.message);
-        console.error("❌ Group error stack:", groupError.stack);
+        logger.error("Error fetching group visitors:", groupError.message);
+        logger.error("Group error stack:", groupError.stack);
         res.status(500).json({ error: 'Failed to fetch group visitors', details: groupError.message });
       }
       
     } else {
       // 🔍 Regular visitor ID - fetch single visitor
       const result = await fetchVisitorDetails(visitorId);
-      console.log("✅ Visitor data fetched successfully for ID:", visitorId);
+      logger.info("Visitor data fetched successfully for ID:", visitorId);
       res.status(200).json(result);
     }
     
   } catch (err) {
-    console.error("❌ Error fetching visitor data:", err.message);
-    console.error("❌ Error stack:", err.stack);
+    logger.error("Error fetching visitor data:", err.message);
+    logger.error("Error stack:", err.stack);
     res.status(500).json({ error: 'Failed to fetch visitor data', details: err.message });
   }
 });
@@ -497,19 +498,19 @@ router.post('/checkin', async (req, res) => {
   }
 
   try {
-    console.log("🔄 Starting check-in process for visitor:", visitor.id);
+    logger.info("Starting check-in process for visitor:", visitor.id);
     const startTime = Date.now();
     
     const result = await submitCheckin({ visitor });
     
     const endTime = Date.now();
     const duration = endTime - startTime;
-    console.log("✅ Check-in completed in", duration, "ms for visitor:", visitor.id, result);
+    logger.info("Check-in completed in", duration, "ms for visitor:", visitor.id, result);
     
     // Handle error response (configuration or Zoho API issues)
     if (!result.success) {
-      console.error("❌ Check-in failed:", result.error);
-      console.error("❌ Details:", result.details);
+      logger.error("Check-in failed:", result.error);
+      logger.error("Details:", result.details);
       
       return res.status(500).json({
         success: false,
@@ -520,8 +521,8 @@ router.post('/checkin', async (req, res) => {
     
     // Handle warning response (Zoho Custom Function failed but process continued)
     if (result.warning) {
-      console.warn("⚠️ Check-in warning:", result.message);
-      console.warn("⚠️ Details:", result.details);
+      logger.warn("Check-in warning:", result.message);
+      logger.warn("Details:", result.details);
       
       // Return 200 with warning info instead of error
       return res.status(200).json({
@@ -535,7 +536,7 @@ router.post('/checkin', async (req, res) => {
     
     res.status(200).json(result);
   } catch (err) {
-    console.error("❌ Error submitting check-in:", err.message);
+    logger.error("Error submitting check-in:", err.message);
     res.status(500).json({ error: 'Failed to submit check-in', details: err.message });
   }
 });

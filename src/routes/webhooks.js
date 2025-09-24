@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const crypto = require('crypto');
 // redisService removed - functionality integrated into redisService
@@ -12,7 +13,7 @@ const socketService = require('../services/socketService');
  */
 router.post('/zoho-changes', async (req, res) => {
   try {
-    console.log('📡 Zoho webhook received:', req.body);
+    logger.info('📡 Zoho webhook received:', req.body);
     
     const { 
       event_type, 
@@ -28,7 +29,7 @@ router.post('/zoho-changes', async (req, res) => {
     // Enhanced webhook signature validation
     if (process.env.ZOHO_WEBHOOK_SECRET && signature) {
       if (!validateWebhookSignature(req, signature)) {
-        console.error('❌ Invalid webhook signature');
+        logger.error("Invalid webhook signature");
         return res.status(401).json({ 
           success: false,
           error: 'Invalid webhook signature' 
@@ -76,10 +77,10 @@ router.post('/zoho-changes', async (req, res) => {
         
       default:
         changeType = 'bulk_change';
-        console.log(`⚠️ Unknown event type: ${event_type}, using bulk_change`);
+        logger.info("⚠️ Unknown event type: ${event_type}, using bulk_change");
     }
     
-    console.log(`🔄 Processing Zoho webhook: ${changeType} for record ${recordId} in ${report_name}`);
+    logger.info("Processing Zoho webhook: ${changeType} for record ${recordId} in ${report_name}");
     
     // Enhanced change handling with detailed logging
     const processingResult = await handleWebhookChange(changeType, recordId, eventId, data, report_name);
@@ -99,7 +100,7 @@ router.post('/zoho-changes', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Zoho webhook error:', error);
+    logger.error("Zoho webhook error:", error);
     
     // Log error metrics
     await logWebhookMetrics(req.body.event_type, 'error', req.body.record_id, req.body.event_id, false);
@@ -119,7 +120,7 @@ router.post('/zoho-changes', async (req, res) => {
  */
 router.post('/zoho-creator-function', async (req, res) => {
   try {
-    console.log('📡 Zoho Creator function webhook received:', req.body);
+    logger.info('📡 Zoho Creator function webhook received:', req.body);
     
     const { 
       function_name,
@@ -149,10 +150,10 @@ router.post('/zoho-creator-function', async (req, res) => {
         
       default:
         changeType = 'bulk_change';
-        console.log(`⚠️ Unknown function: ${function_name}, using bulk_change`);
+        logger.info("⚠️ Unknown function: ${function_name}, using bulk_change");
     }
     
-    console.log(`🔄 Processing Zoho Creator function: ${changeType} for record ${recordId}`);
+    logger.info("Processing Zoho Creator function: ${changeType} for record ${recordId}");
     
     // Handle the change
     await redisService.handleZohoDataChange(changeType, recordId, eventId);
@@ -167,7 +168,7 @@ router.post('/zoho-creator-function', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Zoho Creator function webhook error:', error);
+    logger.error("Zoho Creator function webhook error:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to process Zoho Creator function',
@@ -181,7 +182,7 @@ router.post('/zoho-creator-function', async (req, res) => {
  */
 async function handleWebhookChange(changeType, recordId, eventId, data, reportName) {
   try {
-    console.log(`🔄 Processing webhook change: ${changeType} for record ${recordId}`);
+    logger.info("Processing webhook change: ${changeType} for record ${recordId}");
     
     let result = { success: false, method: 'webhook', changeType };
     
@@ -194,7 +195,7 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
             await redisService.updateSingleRecord(recordId, newRecord);
             result.success = true;
             result.action = 'record_added';
-            console.log(`✅ New record ${recordId} added to cache via webhook`);
+            logger.info("New record ${recordId} added to cache via webhook");
           }
         }
         break;
@@ -207,7 +208,7 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
             await redisService.updateSingleRecord(recordId, updatedRecord);
             result.success = true;
             result.action = 'record_updated';
-            console.log(`✅ Record ${recordId} updated in cache via webhook`);
+            logger.info("Record ${recordId} updated in cache via webhook");
           }
         }
         break;
@@ -218,22 +219,22 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
           await redisService.handleRecordDelete(recordId, eventId);
           result.success = true;
           result.action = 'record_deleted';
-          console.log(`✅ Record ${recordId} removed from cache via webhook`);
+          logger.info("Record ${recordId} removed from cache via webhook");
         }
         break;
         
       case 'bulk_change':
         // Bulk operation - trigger lightweight sync instead of full refresh
-        console.log('🔄 Bulk change detected, performing lightweight sync...');
+        logger.info("Bulk change detected, performing lightweight sync...");
         const syncResult = await redisService.lightweightSync();
         result.success = syncResult.success;
         result.action = 'bulk_sync';
         result.sync_method = syncResult.method;
-        console.log(`✅ Bulk change handled via ${syncResult.method}`);
+        logger.info("Bulk change handled via ${syncResult.method}");
         break;
         
       default:
-        console.log(`⚠️ Unknown change type: ${changeType}`);
+        logger.info("⚠️ Unknown change type: ${changeType}");
         result.success = false;
         result.error = `Unknown change type: ${changeType}`;
     }
@@ -247,9 +248,9 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
           record_id: recordId,
           timestamp: new Date().toISOString()
         }, 'webhook_update');
-        console.log(`📡 Real-time update broadcasted for event ${eventId}`);
+        logger.info(`📡 Real-time update broadcasted for event ${eventId}`);
       } catch (broadcastError) {
-        console.warn('⚠️ Real-time broadcast failed:', broadcastError.message);
+        logger.warn("Real-time broadcast failed:", broadcastError.message);
         // Don't fail the webhook for broadcast errors
       }
     }
@@ -257,7 +258,7 @@ async function handleWebhookChange(changeType, recordId, eventId, data, reportNa
     return result;
     
   } catch (error) {
-    console.error('❌ Webhook change handler error:', error);
+    logger.error("Webhook change handler error:", error);
     return {
       success: false,
       method: 'webhook',
@@ -288,7 +289,7 @@ function validateWebhookSignature(req, signature) {
       Buffer.from(receivedSignature, 'hex')
     );
   } catch (error) {
-    console.error('❌ Signature validation error:', error);
+    logger.error("Signature validation error:", error);
     return false;
   }
 }
@@ -329,7 +330,7 @@ async function logWebhookMetrics(eventType, changeType, recordId, eventId, succe
     await redisService.set(metricsKey, metrics, 7 * 24 * 60 * 60); // 7 days TTL
     
   } catch (error) {
-    console.error('❌ Error logging webhook metrics:', error);
+    logger.error("Error logging webhook metrics:", error);
   }
 }
 
@@ -358,7 +359,7 @@ router.get('/metrics', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Error getting webhook metrics:', error);
+    logger.error("Error getting webhook metrics:", error);
     res.status(500).json({
       success: false,
       error: 'Failed to get webhook metrics',
@@ -372,7 +373,7 @@ router.get('/metrics', async (req, res) => {
  */
 router.post('/test', async (req, res) => {
   try {
-    console.log('🧪 Test webhook received:', req.body);
+    logger.info("🧪 Test webhook received:", req.body);
     
     const testData = {
       event_type: req.body.event_type || 'record_updated',
@@ -399,7 +400,7 @@ router.post('/test', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Test webhook error:', error);
+    logger.error("Test webhook error:", error);
     res.status(500).json({
       success: false,
       error: 'Test webhook failed',
