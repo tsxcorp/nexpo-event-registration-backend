@@ -1,5 +1,11 @@
 const axios = require('axios');
-const logger = require('./logger');
+// Temporarily use console.log instead of logger to avoid production crash
+const logger = {
+  info: (...args) => console.log('[INFO]', ...args),
+  error: (...args) => console.error('[ERROR]', ...args),
+  warn: (...args) => console.warn('[WARN]', ...args),
+  debug: (...args) => console.log('[DEBUG]', ...args)
+};
 const { 
   getEventImageUrl,
   getGalleryImageUrl,
