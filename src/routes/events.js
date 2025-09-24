@@ -1,4 +1,5 @@
 const express = require('express');
+const logger = require('../utils/logger');
 const router = express.Router();
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
 
@@ -482,7 +483,7 @@ router.get('/', async (req, res) => {
   try {
     // If detailed=true and eventId=NEXPO, fetch detailed info for each event
     if (detailed && eventId === 'NEXPO') {
-      console.log("🔄 Fetching detailed events list...");
+      logger.info("Fetching detailed events list...");
       
       // First get the basic list
       const basicResult = await fetchEventDetails(eventId);
@@ -493,7 +494,7 @@ router.get('/', async (req, res) => {
         
         for (const event of basicResult.events) {
           try {
-            console.log(`📋 Fetching detailed info for event: ${event.id}`);
+            logger.info(`📋 Fetching detailed info for event: ${event.id}`);
             const detailedEvent = await fetchEventDetails(event.id);
             
             if (detailedEvent.mode === 'single' && detailedEvent.event) {
@@ -517,7 +518,7 @@ router.get('/', async (req, res) => {
               detailedEvents.push(event);
             }
           } catch (error) {
-            console.warn(`⚠️ Failed to fetch detailed info for event ${event.id}:`, error.message);
+            logger.warn("Failed to fetch detailed info for event ${event.id}:", error.message);
             // Fallback to basic info
             detailedEvents.push(event);
           }
@@ -533,11 +534,11 @@ router.get('/', async (req, res) => {
     
     // Default behavior
     const result = await fetchEventDetails(eventId);
-    console.log("✅ Event data fetched successfully for ID:", eventId);
+    logger.info("Event data fetched successfully for ID:", eventId);
     
     res.status(200).json(result);
   } catch (err) {
-    console.error("❌ Error fetching event data:", err.message);
+    logger.error("Error fetching event data:", err.message);
     res.status(500).json({ error: 'Failed to fetch event data', details: err.message });
   }
 });
