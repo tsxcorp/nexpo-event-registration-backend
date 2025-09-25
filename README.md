@@ -1,1 +1,0 @@
-# Nexpo Event Registration Backend
