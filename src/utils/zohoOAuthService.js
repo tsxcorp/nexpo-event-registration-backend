@@ -66,30 +66,145 @@ class ZohoOAuthService {
   }
 
   /**
-   * Save tokens to file or environment (production)
+   * Save tokens to file and sync with environment variables
    */
   saveTokensToFile() {
-    // In production, we can't modify environment variables at runtime
-    // But we can log the new tokens for manual update
-    if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
-      logger.info("🔄 NEW TOKENS FOR PRODUCTION:");
-      logger.info(`ZOHO_ACCESS_TOKEN=${this.tokenStore.accessToken}`);
-      logger.info(`ZOHO_REFRESH_TOKEN=${this.tokenStore.refreshToken}`);
-      logger.info(`ZOHO_TOKEN_EXPIRES_AT=${this.tokenStore.expiresAt}`);
-      logger.info("Please update these environment variables in Railway dashboard");
-      return;
-    }
-    
-    // Save to file for local development
+    // Save to file first
     try {
       const fs = require('fs');
       const path = require('path');
       const tokenFile = path.join(process.cwd(), 'tokens.json');
       
       fs.writeFileSync(tokenFile, JSON.stringify(this.tokenStore, null, 2));
-      logger.info("Tokens saved to file");
+      logger.info("✅ Tokens saved to file");
     } catch (error) {
-      logger.info("⚠️ Could not save tokens to file:", error.message);
+      logger.error("⚠️ Could not save tokens to file:", error.message);
+    }
+
+    // Sync with .env file for local development
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const envFile = path.join(process.cwd(), '.env');
+      
+      let envContent = '';
+      if (fs.existsSync(envFile)) {
+        envContent = fs.readFileSync(envFile, 'utf8');
+      }
+      
+      // Remove existing token entries
+      envContent = envContent.replace(/^ZOHO_ACCESS_TOKEN=.*$/gm, '');
+      envContent = envContent.replace(/^ZOHO_REFRESH_TOKEN=.*$/gm, '');
+      envContent = envContent.replace(/^ZOHO_TOKEN_EXPIRES_AT=.*$/gm, '');
+      
+      // Add new token entries
+      const newEnvContent = envContent.trim() + '\n' +
+        `ZOHO_ACCESS_TOKEN=${this.tokenStore.accessToken}\n` +
+        `ZOHO_REFRESH_TOKEN=${this.tokenStore.refreshToken}\n` +
+        `ZOHO_TOKEN_EXPIRES_AT=${this.tokenStore.expiresAt}\n`;
+      
+      fs.writeFileSync(envFile, newEnvContent);
+      logger.info("✅ Tokens synced to .env file");
+      
+    } catch (error) {
+      logger.error("⚠️ Could not sync tokens to .env:", error.message);
+    }
+
+    // Auto-update environment variables for production
+    this.updateProductionEnvironmentVariables();
+  }
+
+  /**
+   * Update environment variables in production automatically
+   */
+  updateProductionEnvironmentVariables() {
+    if (process.env.NODE_ENV === 'production' || process.env.RAILWAY_ENVIRONMENT) {
+      try {
+        // Update process.env immediately (works for current process)
+        process.env.ZOHO_ACCESS_TOKEN = this.tokenStore.accessToken;
+        process.env.ZOHO_REFRESH_TOKEN = this.tokenStore.refreshToken;
+        process.env.ZOHO_TOKEN_EXPIRES_AT = this.tokenStore.expiresAt.toString();
+        
+        logger.info("✅ Environment variables updated in memory");
+        
+        // For Railway, try to update via Railway API if available
+        if (process.env.RAILWAY_ENVIRONMENT && process.env.RAILWAY_PROJECT_ID && process.env.RAILWAY_TOKEN) {
+          this.updateRailwayEnvironmentVariables();
+        } else {
+          // Fallback: log tokens for manual update (only if Railway API not available)
+          logger.info("🔄 NEW TOKENS FOR PRODUCTION:");
+          logger.info(`ZOHO_ACCESS_TOKEN=${this.tokenStore.accessToken}`);
+          logger.info(`ZOHO_REFRESH_TOKEN=${this.tokenStore.refreshToken}`);
+          logger.info(`ZOHO_TOKEN_EXPIRES_AT=${this.tokenStore.expiresAt}`);
+          logger.info("⚠️ Railway API not configured - tokens updated in memory only");
+          logger.info("💡 To enable auto-update, set RAILWAY_PROJECT_ID and RAILWAY_TOKEN");
+        }
+      } catch (error) {
+        logger.error("⚠️ Could not update production environment variables:", error.message);
+      }
+    }
+  }
+
+  /**
+   * Update Railway environment variables via API
+   */
+  async updateRailwayEnvironmentVariables() {
+    try {
+      const axios = require('axios');
+      
+      const railwayApiUrl = `https://backboard.railway.app/graphql/v1`;
+      
+      // Update environment variables via Railway GraphQL API
+      const mutation = `
+        mutation updateVariables($input: UpdateVariablesInput!) {
+          updateVariables(input: $input) {
+            variables {
+              name
+              value
+            }
+          }
+        }
+      `;
+      
+      const variables = [
+        {
+          name: 'ZOHO_ACCESS_TOKEN',
+          value: this.tokenStore.accessToken
+        },
+        {
+          name: 'ZOHO_REFRESH_TOKEN', 
+          value: this.tokenStore.refreshToken
+        },
+        {
+          name: 'ZOHO_TOKEN_EXPIRES_AT',
+          value: this.tokenStore.expiresAt.toString()
+        }
+      ];
+      
+      await axios.post(railwayApiUrl, {
+        query: mutation,
+        variables: {
+          input: {
+            projectId: process.env.RAILWAY_PROJECT_ID,
+            variables: variables
+          }
+        }
+      }, {
+        headers: {
+          'Authorization': `Bearer ${process.env.RAILWAY_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      logger.info("✅ Railway environment variables updated via API");
+      
+    } catch (error) {
+      logger.error("⚠️ Failed to update Railway environment variables:", error.response?.data || error.message);
+      // Fallback to manual logging
+      logger.info("🔄 FALLBACK - NEW TOKENS FOR MANUAL UPDATE:");
+      logger.info(`ZOHO_ACCESS_TOKEN=${this.tokenStore.accessToken}`);
+      logger.info(`ZOHO_REFRESH_TOKEN=${this.tokenStore.refreshToken}`);
+      logger.info(`ZOHO_TOKEN_EXPIRES_AT=${this.tokenStore.expiresAt}`);
     }
   }
 

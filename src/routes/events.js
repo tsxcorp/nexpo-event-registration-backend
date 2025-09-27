@@ -511,12 +511,24 @@ router.get('/', async (req, res) => {
             logger.info(`📋 Fetching detailed info for event: ${event.id}`);
             let detailedEvent;
             
-            // Try Custom API first, fallback to REST API
+            // Try Custom API first, fallback to REST API only if token is available
             try {
               detailedEvent = await fetchEventDetails(event.id);
             } catch (customError) {
               logger.warn(`Custom API failed for event ${event.id}, trying REST API:`, customError.message);
-              detailedEvent = await fetchEventDetailsREST(event.id);
+              
+              // Only try REST API if we have a token
+              if (process.env.ZOHO_ACCESS_TOKEN) {
+                try {
+                  detailedEvent = await fetchEventDetailsREST(event.id);
+                } catch (restError) {
+                  logger.warn(`Both Custom API and REST API failed for event ${event.id}:`, restError.message);
+                  throw customError; // Throw original Custom API error
+                }
+              } else {
+                logger.warn(`No ZOHO_ACCESS_TOKEN available for event ${event.id}, cannot use REST API fallback`);
+                throw customError; // Throw original Custom API error
+              }
             }
             
             if (detailedEvent.mode === 'single' && detailedEvent.event) {
@@ -555,15 +567,27 @@ router.get('/', async (req, res) => {
       }
     }
     
-    // Default behavior - try Custom API first, fallback to REST API
+    // Default behavior - try Custom API first, fallback to REST API only if token is available
     let result;
     try {
       result = await fetchEventDetails(eventId);
       logger.info("Event data fetched successfully via Custom API for ID:", eventId);
     } catch (customError) {
       logger.warn(`Custom API failed for event ${eventId}, trying REST API:`, customError.message);
-      result = await fetchEventDetailsREST(eventId);
-      logger.info("Event data fetched successfully via REST API for ID:", eventId);
+      
+      // Only try REST API if we have a token
+      if (process.env.ZOHO_ACCESS_TOKEN) {
+        try {
+          result = await fetchEventDetailsREST(eventId);
+          logger.info("Event data fetched successfully via REST API for ID:", eventId);
+        } catch (restError) {
+          logger.error(`Both Custom API and REST API failed for event ${eventId}:`, restError.message);
+          throw customError; // Throw original Custom API error
+        }
+      } else {
+        logger.warn("No ZOHO_ACCESS_TOKEN available, cannot use REST API fallback");
+        throw customError; // Throw original Custom API error
+      }
     }
     
     res.status(200).json(result);
