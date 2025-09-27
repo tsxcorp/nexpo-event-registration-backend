@@ -1,7 +1,8 @@
 const express = require('express');
 const logger = require('../utils/logger');
 const router = express.Router();
-// redisService removed - functionality integrated into redisService
+const syncWorker = require('../services/syncWorker');
+const redisService = require('../services/redisService');
 
 /**
  * Sync Management API
@@ -97,11 +98,26 @@ router.get('/status', async (req, res) => {
  */
 router.post('/trigger-full', async (req, res) => {
   try {
-    const result = await redisService.triggerFullSync();
+    // Get all cached events and sync them
+    const eventKeys = await redisService.client.keys('cache:event:*:meta');
+    const results = [];
+    
+    for (const key of eventKeys) {
+      const eventId = key.match(/cache:event:([^:]+):meta/)?.[1];
+      if (eventId) {
+        try {
+          const result = await syncWorker.syncEventData(eventId);
+          results.push({ eventId, success: true, result });
+        } catch (error) {
+          results.push({ eventId, success: false, error: error.message });
+        }
+      }
+    }
+    
     res.json({
       success: true,
       message: 'Full synchronization completed',
-      result,
+      results,
       timestamp: new Date().toISOString()
     });
   } catch (error) {
