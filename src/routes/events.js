@@ -8,6 +8,7 @@ const logger = {
 };
 const router = express.Router();
 const { fetchEventDetails } = require('../utils/zohoEventUtils');
+const { fetchEventDetailsREST } = require('../utils/zohoEventUtilsREST');
 
 /**
  * @swagger
@@ -146,6 +147,9 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *         ticket_mode:
  *           type: boolean
  *           description: Chế độ ticket
+ *         one_time_check_in:
+ *           type: boolean
+ *           description: Chế độ check-in một lần
  *     
  *     EventDetail:
  *       type: object
@@ -203,6 +207,10 @@ const { fetchEventDetails } = require('../utils/zohoEventUtils');
  *         ticket_mode:
  *           type: boolean
  *           description: Chế độ ticket của event
+ *           example: false
+ *         one_time_check_in:
+ *           type: boolean
+ *           description: Chế độ check-in một lần của event
  *           example: false
  *         logo:
  *           type: string
@@ -501,7 +509,15 @@ router.get('/', async (req, res) => {
         for (const event of basicResult.events) {
           try {
             logger.info(`📋 Fetching detailed info for event: ${event.id}`);
-            const detailedEvent = await fetchEventDetails(event.id);
+            let detailedEvent;
+            
+            // Try Custom API first, fallback to REST API
+            try {
+              detailedEvent = await fetchEventDetails(event.id);
+            } catch (customError) {
+              logger.warn(`Custom API failed for event ${event.id}, trying REST API:`, customError.message);
+              detailedEvent = await fetchEventDetailsREST(event.id);
+            }
             
             if (detailedEvent.mode === 'single' && detailedEvent.event) {
               detailedEvents.push({
@@ -517,6 +533,7 @@ router.get('/', async (req, res) => {
                 badge_size: detailedEvent.event.badge_size,
                 badge_printing: detailedEvent.event.badge_printing, // Accurate value
                 ticket_mode: detailedEvent.event.ticket_mode,
+                one_time_check_in: detailedEvent.event.one_time_check_in,
                 badge_custom_content: detailedEvent.event.badge_custom_content
               });
             } else {
@@ -524,7 +541,7 @@ router.get('/', async (req, res) => {
               detailedEvents.push(event);
             }
           } catch (error) {
-            logger.warn("Failed to fetch detailed info for event ${event.id}:", error.message);
+            logger.warn(`Failed to fetch detailed info for event ${event.id}:`, error.message);
             // Fallback to basic info
             detailedEvents.push(event);
           }
@@ -538,9 +555,16 @@ router.get('/', async (req, res) => {
       }
     }
     
-    // Default behavior
-    const result = await fetchEventDetails(eventId);
-    logger.info("Event data fetched successfully for ID:", eventId);
+    // Default behavior - try Custom API first, fallback to REST API
+    let result;
+    try {
+      result = await fetchEventDetails(eventId);
+      logger.info("Event data fetched successfully via Custom API for ID:", eventId);
+    } catch (customError) {
+      logger.warn(`Custom API failed for event ${eventId}, trying REST API:`, customError.message);
+      result = await fetchEventDetailsREST(eventId);
+      logger.info("Event data fetched successfully via REST API for ID:", eventId);
+    }
     
     res.status(200).json(result);
   } catch (err) {

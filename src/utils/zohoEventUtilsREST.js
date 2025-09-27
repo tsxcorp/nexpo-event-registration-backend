@@ -72,8 +72,8 @@ const fetchEventDetailsREST = async (eventIdInput) => {
  */
 const fetchAllEventsREST = async (token) => {
   try {
-    // Get all events from All_Events report
-    const eventsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/All_Events`;
+    // Get all events from API_Events report
+    const eventsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/API_Events`;
     
     logger.info(`📋 Fetching all events from REST API...`);
     
@@ -110,7 +110,8 @@ const fetchAllEventsREST = async (token) => {
         location: event.Location || "",
         badge_size: event.Badge_Size || "",
         badge_printing: event.Badge_Printing === true || event.Badge_Printing === "true",
-        ticket_mode: event.Ticketing_Enable === true || event.Ticketing_Enable === "true"
+        ticket_mode: event.Ticketing_Enable === true || event.Ticketing_Enable === "true",
+        one_time_check_in: event.One_Time_Check_In === true || event.One_Time_Check_In === "true"
       };
     });
 
@@ -133,7 +134,7 @@ const fetchAllEventsREST = async (token) => {
 const fetchSingleEventREST = async (eventId, token) => {
   try {
     // 1. Get event basic info
-    const eventUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/All_Events/${eventId}`;
+    const eventUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/API_Events/${eventId}`;
     
     logger.info(`🔍 Fetching event details for: ${eventId}`);
     
@@ -153,29 +154,104 @@ const fetchSingleEventREST = async (eventId, token) => {
 
     const eventData = eventResponse.data.data;
 
-     // 2. Fetch form fields from All_Custom_Fields report
+     // 2. Extract form fields from API_Events response (Form_Fields arrays)
      let formFields = [];
-     try {
-       formFields = await fetchEventFormFields(eventId, token);
-       logger.info(`Fetched ${formFields.length} form fields from All_Custom_Fields`);
-     } catch (error) {
-       logger.warn(`Failed to fetch form fields for event ${eventId}:`, error.message);
+     if (eventData['Form_Fields.Field_ID'] && Array.isArray(eventData['Form_Fields.Field_ID'])) {
+       const fieldCount = eventData['Form_Fields.Field_ID'].length;
+       logger.info(`Debug: Found ${fieldCount} form fields in API_Events arrays`);
+       
+       // Build formFields from arrays - each index represents one field
+       const allFormFields = Array.from({ length: fieldCount }, (_, index) => {
+         const field_id = eventData['Form_Fields.Field_ID']?.[index] || `auto_field_${index}`;
+         const label = eventData['Form_Fields.Label']?.[index] || '';
+         const type = eventData['Form_Fields.Type_field']?.[index] || '';
+         const required = eventData['Form_Fields.Required']?.[index] === 'true';
+         const sort = parseInt(eventData['Form_Fields.Sort']?.[index]) || index;
+         const status = eventData['Form_Fields.Status']?.[index] || 'active';
+         const helptext = eventData['Form_Fields.Help_Text']?.[index] || '';
+         const placeholder = eventData['Form_Fields.Placeholder']?.[index] || '';
+         const field_condition = eventData['Form_Fields.Field_Condition']?.[index] || '';
+         const section_id = eventData['Form_Fields.Section_ID']?.[index] || '';
+         const section_name = eventData['Form_Fields.Section_Name']?.[index] || '';
+         const section_sort = eventData['Form_Fields.Section_Sort']?.[index] || '';
+         const section_condition = eventData['Form_Fields.Section_Condition']?.[index] || '';
+         const matching_field = eventData['Form_Fields.Matching_Field']?.[index] === 'true';
+         const groupmember = eventData['Form_Fields.Group_Member_Field']?.[index] === 'true';
+         const value = eventData['Form_Fields.Value']?.[index] || '';
+         const values = value ? value.split(',').map(v => v.trim()) : [];
+         const content = eventData['Form_Fields.Content']?.[index] || '';
+         const checkbox_label = eventData['Form_Fields.Checkbox_Label']?.[index] || null;
+         const link_text = eventData['Form_Fields.Link_Text']?.[index] || null;
+         const link_url = eventData['Form_Fields.Link_URL']?.[index] || null;
+         // Ensure link_url is null if empty object
+         const final_link_url = (link_url && typeof link_url === 'object' && Object.keys(link_url).length === 0) ? null : link_url;
+         const title = eventData['Form_Fields.Title']?.[index] || null;
+         
+         // Build translation object
+         const en_label = eventData['Form_Fields.en_Label']?.[index];
+         const translation = en_label ? {
+           label: en_label,
+           placeholder: eventData['Form_Fields.en_Placeholder']?.[index] || '',
+           helptext: eventData['Form_Fields.en_HelpText']?.[index] || '',
+           value: eventData['Form_Fields.en_Value']?.[index] || ''
+         } : null;
+         
+         return {
+           field_id,
+           sort,
+           label,
+           type,
+           required,
+           groupmember,
+           helptext,
+           placeholder,
+           field_condition,
+           section_id,
+           section_name,
+           section_sort,
+           section_condition,
+           matching_field,
+           values,
+           content,
+           checkbox_label,
+           link_text,
+           link_url: final_link_url,
+           title,
+           translation,
+           status: status.toLowerCase()
+         };
+       });
+       
+       // Filter only Active fields
+       formFields = allFormFields.filter(field => field.status === 'active');
+       
+       logger.info(`Filtered ${formFields.length} active fields from ${allFormFields.length} total fields`);
      }
 
-    // 3. Get exhibitors from Event_Exhibitors report
+    // 3. Extract exhibitors from event data (already included in API_Events response)
     let exhibitors = [];
-    try {
-      exhibitors = await fetchEventExhibitors(eventId, token);
-    } catch (error) {
-      logger.warn(`Failed to fetch exhibitors for event ${eventId}:`, error.message);
+    if (eventData.Exhibitor_List && Array.isArray(eventData.Exhibitor_List)) {
+      exhibitors = eventData.Exhibitor_List.map(exhibitor => ({
+        id: String(exhibitor.ID),
+        event_info: {
+          id: String(exhibitor.Event_Info?.ID || ""),
+          name: exhibitor.Event_Info?.Event_Name || ""
+        }
+      }));
+      logger.info(`Extracted ${exhibitors.length} exhibitors from event data`);
     }
 
-    // 4. Get sessions from Event_Sessions report
+    // 4. Extract sessions from event data (already included in API_Events response)
     let sessions = [];
-    try {
-      sessions = await fetchEventSessions(eventId, token);
-    } catch (error) {
-      logger.warn(`Failed to fetch sessions for event ${eventId}:`, error.message);
+    if (eventData.Sessions && Array.isArray(eventData.Sessions)) {
+      sessions = eventData.Sessions.map(session => ({
+        id: String(session.ID),
+        event_info: {
+          id: String(session.Event_Info?.ID || ""),
+          name: session.Event_Info?.Event_Name || ""
+        }
+      }));
+      logger.info(`Extracted ${sessions.length} sessions from event data`);
     }
 
     // 5. Get gallery images from Event_Gallery report
@@ -186,39 +262,30 @@ const fetchSingleEventREST = async (eventId, token) => {
       logger.warn(`Failed to fetch gallery for event ${eventId}:`, error.message);
     }
 
-    // Helper function to build Custom API style image URLs
-    const buildCustomStyleImageUrl = (relativeUrl, recordId, fieldName) => {
+    // Helper function to build proxy image URLs (via backend)
+    const buildProxyImageUrl = (relativeUrl, recordId, fieldName) => {
       if (!relativeUrl) return "";
       
       // Extract filename from relative URL
-      // Example: /api/v2.1/tsxcorp/nxp/report/All_Events/4433256000013547003/Banner/download?filepath=1757774775515574_HTTV___YBA__1920x600_.jpg
+      // Example: /api/v2.1/tsxcorp/nxp/report/API_Events/4433256000013547003/Banner/download?filepath=1757774775515574_HTTV___YBA__1920x600_.jpg
       const filepathMatch = relativeUrl.match(/filepath=([^&]+)/);
       if (!filepathMatch) return "";
       
       const filename = filepathMatch[1];
       
-      // Use private link from environment variable
-      const privateLink = process.env.ZOHO_PRIVATELINK_ALL_EVENTS;
-      
-      if (!privateLink) {
-        logger.warn(`ZOHO_PRIVATELINK_ALL_EVENTS not set, using fallback URL`);
-        return `https://www.zohoapis.com${relativeUrl}`;
-      }
-      
-      // Build Custom API style URL
-      // Format: https://creatorexport.zoho.com/file/{org}/{app}/{table}/{recordId}/{field}/image-download/{private_link}
-      const baseUrl = `https://creatorexport.zoho.com/file/${ZOHO_ORG_NAME}/nxp/All_Events/${recordId}/${fieldName}/image-download/${privateLink}`;
-      
-      return `${baseUrl}?filepath=/${filename}`;
+      // Build absolute proxy URL through backend (no token needed for frontend)
+      // Frontend can use this URL directly in <img> or Next.js Image
+      const baseUrl = process.env.BACKEND_BASE_URL || 'http://localhost:3000';
+      return `${baseUrl}/api/proxy-image?recordId=${recordId}&fieldName=${fieldName}&filename=${encodeURIComponent(filename)}`;
     };
 
-    // Build image URLs with Custom API style
-    const banner = buildCustomStyleImageUrl(eventData.Banner, eventData.ID, "Banner");
-    const logo = buildCustomStyleImageUrl(eventData.Logo, eventData.ID, "Logo");
-    const header = buildCustomStyleImageUrl(eventData.Header, eventData.ID, "Header");
-    const footer = buildCustomStyleImageUrl(eventData.Footer, eventData.ID, "Footer");
-    const favicon = buildCustomStyleImageUrl(eventData.Favicon, eventData.ID, "Favicon");
-    const floor_plan_pdf = buildCustomStyleImageUrl(eventData.Floor_Plan, eventData.ID, "Floor_Plan");
+    // Build image URLs with proxy URLs (via backend)
+    const banner = buildProxyImageUrl(eventData.Banner, eventData.ID, "Banner");
+    const logo = buildProxyImageUrl(eventData.Logo, eventData.ID, "Logo");
+    const header = buildProxyImageUrl(eventData.Header, eventData.ID, "Header");
+    const footer = buildProxyImageUrl(eventData.Footer, eventData.ID, "Footer");
+    const favicon = buildProxyImageUrl(eventData.Favicon, eventData.ID, "Favicon");
+    const floor_plan_pdf = buildProxyImageUrl(eventData.Floor_Plan, eventData.ID, "Floor_Plan");
 
     // Process the event data
     const processedEvent = {
@@ -233,6 +300,7 @@ const fetchSingleEventREST = async (eventId, token) => {
       badge_custom_content: parseBadgeCustomContent(eventData.Badge_Custom_Content),
       badge_printing: eventData.Badge_Printing === true || eventData.Badge_Printing === "true",
       ticket_mode: eventData.Ticketing_Enable === true || eventData.Ticketing_Enable === "true",
+      one_time_check_in: eventData.One_Time_Check_In === true || eventData.One_Time_Check_In === "true",
       formFields: formFields,
       exhibitors: exhibitors,
       sessions: sessions,
@@ -258,68 +326,13 @@ const fetchSingleEventREST = async (eventId, token) => {
   }
 };
 
-/**
- * Fetch form fields for an event from All_Custom_Fields report
- */
-const fetchEventFormFields = async (eventId, token) => {
-  try {
-    const formFieldsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/All_Custom_Fields`;
-    
-    const response = await axios.get(formFieldsUrl, {
-      headers: {
-        'Authorization': `Zoho-oauthtoken ${token}`,
-        'Accept': 'application/json'
-      },
-      params: {
-        field_config: 'all',
-        criteria: `Event_Info = ${eventId}`
-      }
-    });
-
-    if (response.data.code !== 3000 || !response.data.data) {
-      logger.warn(`No form fields found for event ${eventId} in All_Custom_Fields`);
-      return [];
-    }
-
-    const formFieldsData = Array.isArray(response.data.data) ? response.data.data : [response.data.data];
-    
-    // Debug: Log first field to see available fields
-    if (formFieldsData.length > 0) {
-      logger.info(`Debug: First form field keys:`, Object.keys(formFieldsData[0]));
-    }
-    
-    return formFieldsData.map((field, index) => ({
-      field_id: field.Field_ID || `auto_field_${index}`,
-      sort: field.Sort_Order || index,
-      label: field.Label || "",
-      type: field.Field_Type || "",
-      required: field.Required === true || field.Required === "true",
-      groupmember: field.Group_Member === true || field.Group_Member === "true",
-      helptext: field.Help_Text || "",
-      placeholder: field.Placeholder || "",
-      field_condition: field.Field_Condition || "",
-      section_id: field.Section_ID || "",
-      section_name: field.Section_Name || "",
-      section_sort: field.Section_Sort || 0,
-      section_condition: field.Section_Condition || "",
-      matching_field: field.Matching_Field === true || field.Matching_Field === "true",
-      values: field.Values ? field.Values.split(',').map(v => v.trim()) : [],
-      translation: field.Translation ? JSON.parse(field.Translation) : null,
-      status: field.Status || field.Active || field.Status_Field || field.Field_Status || "active" // Add Status field for render decision
-    }));
-
-  } catch (error) {
-    logger.error(`Error fetching form fields for event ${eventId}:`, error.message);
-    return [];
-  }
-};
 
 /**
  * Fetch exhibitors for an event
  */
 const fetchEventExhibitors = async (eventId, token) => {
   try {
-    const exhibitorsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/Event_Exhibitors`;
+    const exhibitorsUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/Exhibitor_List`;
     
     const response = await axios.get(exhibitorsUrl, {
       headers: {
@@ -328,7 +341,7 @@ const fetchEventExhibitors = async (eventId, token) => {
       },
       params: {
         field_config: 'all',
-        criteria: `Event_ID = ${eventId}`
+        criteria: `Event_Info = ${eventId}`
       }
     });
 
@@ -384,7 +397,7 @@ const fetchEventSessions = async (eventId, token) => {
       },
       params: {
         field_config: 'all',
-        criteria: `Event_ID = ${eventId}`
+        criteria: `Event_Info = ${eventId}`
       }
     });
 

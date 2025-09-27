@@ -50,6 +50,8 @@ app.use(cors({
       'https://creatorapp.zoho.com.au',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
+      'http://localhost:3001',
+      'http://127.0.0.1:3001',
       'https://nexpo-event-registration-backend-production.up.railway.app',
       'https://registration.nexpo.vn'
     ];
@@ -98,6 +100,7 @@ const zohoWebhookSyncRoutes = require('./routes/zohoWebhookSync'); // /api/webho
 const zohoCrudRoutes = require('./routes/zohoCrud'); // /api/zoho-crud (CRUD Operations)
 const syncRoutes = require('./routes/sync'); // /api/sync (Sync Management)
 const syncWorkerRoutes = require('./routes/syncWorker'); // /api/sync-worker (Sync Worker Management)
+const proxyImageRoutes = require('./routes/proxyImage'); // /api/proxy-image (Image Proxy)
 
 app.use('/api/events', eventRoutes);
 app.use('/api/events-rest', eventRESTRoutes);
@@ -117,6 +120,7 @@ app.use('/api/webhooks', zohoWebhookSyncRoutes);
 app.use('/api/zoho-crud', zohoCrudRoutes);
 app.use('/api/sync', syncRoutes);
 app.use('/api/sync-worker', syncWorkerRoutes);
+app.use('/api', proxyImageRoutes); // Proxy image routes
 
 // Serve static files for widget testing
 app.use(express.static('./', { 

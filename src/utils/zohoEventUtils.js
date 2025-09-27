@@ -86,6 +86,7 @@ const fetchEventDetails = async (eventIdInput) => {
             badge_size: event.badge_size || "",
             badge_printing: false, // NEXPO mode limitation - always false
             ticket_mode: event.ticket_mode || false,
+            one_time_check_in: event.one_time_check_in || false,
             note: "For accurate badge_printing, use single event API"
           };
         });
@@ -135,7 +136,8 @@ const fetchEventDetails = async (eventIdInput) => {
         section_name: field.section_name || "",
         section_sort: field.section_sort || 0,
         section_condition: field.section_condition || "",
-        matching_field: field.matching_field || false
+        matching_field: field.matching_field || false,
+        status: field.status || field.active || field.status_field || field.field_status || "active" // Add Status field for render decision
       };
 
       // Log field_id status for debugging
@@ -278,6 +280,7 @@ const fetchEventDetails = async (eventIdInput) => {
         badge_custom_content: eventData.badge_custom_content || {},
         badge_printing: eventData.badge_printing || false,
         ticket_mode: eventData.ticket_mode || false,
+        one_time_check_in: eventData.one_time_check_in || false,
         formFields: enrichedFields,
         exhibitors: processedExhibitors,
         sessions: processedSessions,
