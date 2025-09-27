@@ -26,20 +26,17 @@ logger.info(`  ZOHO_BASE_URL: ${ZOHO_BASE_URL ? '✅ Set' : '❌ Missing'}`);
 logger.info(`  ZOHO_PUBLIC_KEY: ${ZOHO_PUBLIC_KEY ? '✅ Set' : '❌ Missing'}`);
 
 /**
- * Get Zoho OAuth token from environment variable or tokens.json
+ * Get Zoho OAuth token with automatic refresh
  */
-const getZohoToken = () => {
-  // Try environment variable first (for production)
-  if (process.env.ZOHO_ACCESS_TOKEN) {
-    return process.env.ZOHO_ACCESS_TOKEN;
-  }
+const getZohoToken = async () => {
+  const zohoOAuthService = require('./zohoOAuthService');
   
-  // Fallback to tokens.json (for local development)
   try {
-    const tokens = require('../../tokens.json');
-    return tokens.accessToken || tokens.access_token;
+    // Use OAuth service to get valid token (with auto-refresh)
+    const token = await zohoOAuthService.getValidAccessToken();
+    return token;
   } catch (error) {
-    logger.error('Error loading Zoho tokens:', error.message);
+    logger.error('Error getting valid Zoho token:', error.message);
     throw new Error('Zoho OAuth token not available');
   }
 };
@@ -48,9 +45,8 @@ const getZohoToken = () => {
  * Fetch event data using Zoho Creator REST API v2.1
  */
 const fetchEventDetailsREST = async (eventIdInput) => {
-  const token = getZohoToken();
-  
   try {
+    const token = await getZohoToken();
     logger.info(`🔍 Fetching event data via REST API for: ${eventIdInput}`);
     
     // Check if this is a list all events request
