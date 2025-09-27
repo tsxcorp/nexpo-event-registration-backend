@@ -13,9 +13,16 @@ router.get('/proxy-image', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters: recordId, fieldName, filename' });
     }
 
-    // Get valid OAuth token
-    const token = await zohoOAuthService.getValidAccessToken();
+    logger.info(`🖼️ Proxy image request: ${recordId}/${fieldName}/${filename}`);
+
+    // Get valid OAuth token with timeout
+    const token = await Promise.race([
+      zohoOAuthService.getValidAccessToken(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Token timeout')), 5000))
+    ]);
+    
     if (!token) {
+      logger.error('❌ Failed to get valid OAuth token');
       return res.status(401).json({ error: 'Failed to get valid OAuth token' });
     }
 
@@ -27,28 +34,30 @@ router.get('/proxy-image', async (req, res) => {
     
     logger.info(`Proxying image: ${downloadUrl}`);
 
-    // Fetch image from Zoho Creator
+    // Fetch image from Zoho Creator as buffer (more reliable than stream)
     const response = await axios.get(downloadUrl, {
       headers: {
         'Authorization': `Zoho-oauthtoken ${token}`,
         'User-Agent': 'NEXPO-Backend/1.0'
       },
-      responseType: 'stream',
-      timeout: 30000 // 30 seconds timeout
+      responseType: 'arraybuffer', // Use buffer instead of stream
+      timeout: 30000, // 30 seconds timeout
+      maxRedirects: 0, // Prevent redirect issues
+      maxContentLength: 10 * 1024 * 1024 // 10MB max image size
     });
 
     // Set appropriate headers
     res.set({
       'Content-Type': response.headers['content-type'] || 'image/jpeg',
-      'Content-Length': response.headers['content-length'],
+      'Content-Length': response.data.length,
       'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET',
       'Access-Control-Allow-Headers': 'Content-Type'
     });
 
-    // Pipe the image data to response
-    response.data.pipe(res);
+    // Send the image buffer
+    res.send(Buffer.from(response.data));
 
   } catch (error) {
     logger.error(`Error proxying image:`, error.message);

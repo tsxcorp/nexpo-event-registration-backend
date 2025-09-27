@@ -85,6 +85,7 @@ app.use(bodyParser.urlencoded({ extended: true, limit: '10mb' }));
 // === Route declarations ===
 const eventRoutes = require('./routes/events');               // /api/events/:id (Custom API)
 const eventRESTRoutes = require('./routes/eventsREST');       // /api/events-rest (REST API)
+const eventProxyRoutes = require('./routes/eventsProxy');     // /api/events-proxy (REST API with Proxy Images)
 const registrationRoutes = require('./routes/registrations'); // /api/registrations
 const importRoutes = require('./routes/imports');              // /api/imports
 const visitorRoutes = require('./routes/visitors');           // /api/visitors
@@ -104,6 +105,7 @@ const proxyImageRoutes = require('./routes/proxyImage'); // /api/proxy-image (Im
 
 app.use('/api/events', eventRoutes);
 app.use('/api/events-rest', eventRESTRoutes);
+app.use('/api/events-proxy', eventProxyRoutes);
 app.use('/api/registrations', registrationRoutes);
 app.use('/api/imports', importRoutes);
 app.use('/api/visitors', visitorRoutes);
