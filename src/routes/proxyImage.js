@@ -1,19 +1,20 @@
 const express = require('express');
 const axios = require('axios');
+const sharp = require('sharp'); // Fast image processing
 const router = express.Router();
 const zohoOAuthService = require('../utils/zohoOAuthService');
 const logger = require('../utils/logger');
 
-// Proxy image endpoint to handle Zoho Creator images
+// Enhanced proxy image endpoint with WebP conversion
 router.get('/proxy-image', async (req, res) => {
   try {
-    const { recordId, fieldName, filename } = req.query;
+    const { recordId, fieldName, filename, quality = 80, width, format = 'webp' } = req.query;
     
     if (!recordId || !fieldName || !filename) {
       return res.status(400).json({ error: 'Missing required parameters: recordId, fieldName, filename' });
     }
 
-    logger.info(`🖼️ Proxy image request: ${recordId}/${fieldName}/${filename}`);
+    logger.info(`🖼️ Enhanced proxy image request: ${recordId}/${fieldName}/${filename} (${format}, quality: ${quality})`);
 
     // Get valid OAuth token with timeout
     const token = await Promise.race([
@@ -43,21 +44,87 @@ router.get('/proxy-image', async (req, res) => {
       responseType: 'arraybuffer', // Use buffer instead of stream
       timeout: 30000, // 30 seconds timeout
       maxRedirects: 0, // Prevent redirect issues
-      maxContentLength: 10 * 1024 * 1024 // 10MB max image size
+      maxContentLength: 20 * 1024 * 1024 // 20MB max image size
     });
 
+    let processedBuffer = Buffer.from(response.data);
+    const originalSize = processedBuffer.length;
+    
+    // Process image with Sharp for optimization
+    try {
+      const sharpInstance = sharp(processedBuffer);
+      
+      // Get image metadata
+      const metadata = await sharpInstance.metadata();
+      logger.info(`📊 Original image: ${metadata.width}x${metadata.height}, ${metadata.format}, ${originalSize} bytes`);
+      
+      // Apply transformations
+      if (width && parseInt(width) > 0) {
+        sharpInstance.resize(parseInt(width), null, {
+          withoutEnlargement: true, // Don't enlarge smaller images
+          fit: 'inside' // Maintain aspect ratio
+        });
+      }
+      
+      // Convert to requested format with quality
+      switch (format.toLowerCase()) {
+        case 'webp':
+          sharpInstance.webp({ 
+            quality: parseInt(quality),
+            effort: 6 // Higher effort = better compression
+          });
+          break;
+        case 'jpeg':
+        case 'jpg':
+          sharpInstance.jpeg({ 
+            quality: parseInt(quality),
+            progressive: true
+          });
+          break;
+        case 'png':
+          sharpInstance.png({ 
+            quality: parseInt(quality),
+            compressionLevel: 9
+          });
+          break;
+        case 'avif':
+          sharpInstance.avif({ 
+            quality: parseInt(quality)
+          });
+          break;
+        default:
+          // Keep original format if not specified
+          break;
+      }
+      
+      processedBuffer = await sharpInstance.toBuffer();
+      const processedSize = processedBuffer.length;
+      const compressionRatio = ((originalSize - processedSize) / originalSize * 100).toFixed(1);
+      
+      logger.info(`✅ Processed image: ${processedSize} bytes (${compressionRatio}% reduction)`);
+      
+    } catch (sharpError) {
+      logger.warn(`⚠️ Sharp processing failed, using original: ${sharpError.message}`);
+      // Fallback to original image
+    }
+
     // Set appropriate headers
+    const contentType = format.toLowerCase() === 'jpeg' ? 'image/jpeg' : `image/${format}`;
+    
     res.set({
-      'Content-Type': response.headers['content-type'] || 'image/jpeg',
-      'Content-Length': response.data.length,
-      'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+      'Content-Type': contentType,
+      'Content-Length': processedBuffer.length,
+      'Cache-Control': 'public, max-age=3600, immutable',
+      'X-Image-Format': format,
+      'X-Original-Size': originalSize,
+      'X-Processed-Size': processedBuffer.length,
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET',
       'Access-Control-Allow-Headers': 'Content-Type'
     });
 
-    // Send the image buffer
-    res.send(Buffer.from(response.data));
+    // Send the processed image buffer
+    res.send(processedBuffer);
 
   } catch (error) {
     logger.error(`Error proxying image:`, error.message);

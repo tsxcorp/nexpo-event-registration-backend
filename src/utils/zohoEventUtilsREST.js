@@ -278,7 +278,7 @@ const fetchSingleEventREST = async (eventId, token) => {
         baseUrl = `https://${baseUrl}`;
       }
       
-      return `${baseUrl}/api/proxy-image?recordId=${recordId}&fieldName=${fieldName}&filename=${encodeURIComponent(filename)}`;
+      return `${baseUrl}/api/proxy-image?recordId=${recordId}&fieldName=${fieldName}&filename=${encodeURIComponent(filename)}&format=webp&quality=80`;
     };
 
     // Build image URLs with proxy URLs (via backend)
