@@ -275,7 +275,7 @@ const fetchSingleEventREST = async (eventId, token) => {
       
       // Build absolute proxy URL through backend (no token needed for frontend)
       // Frontend can use this URL directly in <img> or Next.js Image
-      const baseUrl = process.env.BACKEND_BASE_URL || 'http://localhost:3000';
+      const baseUrl = process.env.BACKEND_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'http://localhost:3000';
       return `${baseUrl}/api/proxy-image?recordId=${recordId}&fieldName=${fieldName}&filename=${encodeURIComponent(filename)}`;
     };
 
