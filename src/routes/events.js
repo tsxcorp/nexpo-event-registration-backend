@@ -20,6 +20,8 @@ const convertToProxyUrl = (url, recordId, fieldName) => {
   const filepathMatch = url.match(/filepath=([^&]+)/);
   if (filepathMatch) {
     filename = filepathMatch[1];
+    // Decode URL encoding if present
+    filename = decodeURIComponent(filename);
   } else {
     // For relative URLs like "/api/v2.1/...", extract the last part
     const pathParts = url.split('/');
@@ -27,6 +29,8 @@ const convertToProxyUrl = (url, recordId, fieldName) => {
       const lastPart = pathParts[pathParts.length - 1];
       if (lastPart && lastPart.includes('.')) {
         filename = lastPart;
+        // Decode URL encoding if present
+        filename = decodeURIComponent(filename);
       }
     }
   }
@@ -42,7 +46,8 @@ const convertToProxyUrl = (url, recordId, fieldName) => {
     baseUrl = `https://${baseUrl}`;
   }
   
-  return `${baseUrl}/api/proxy-image?recordId=${recordId}&fieldName=${fieldName}&filename=${encodeURIComponent(filename)}&format=webp&quality=80`;
+  // Don't double encode - filename is already extracted from URL
+  return `${baseUrl}/api/proxy-image?recordId=${recordId}&fieldName=${fieldName}&filename=${filename}&format=webp&quality=80`;
 };
 
 /**
