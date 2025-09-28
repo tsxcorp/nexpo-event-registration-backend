@@ -72,8 +72,8 @@ const normalizeEventImages = (eventData, eventId) => {
     if (event.exhibitors && Array.isArray(event.exhibitors)) {
       event.exhibitors = event.exhibitors.map(exhibitor => ({
         ...exhibitor,
-        company_logo: exhibitor.company_logo ? convertToProxyUrl(exhibitor.company_logo, eventId, 'Company_Logo') : exhibitor.company_logo,
-        cover_image: exhibitor.cover_image ? convertToProxyUrl(exhibitor.cover_image, eventId, 'Cover_Image') : exhibitor.cover_image
+        company_logo: exhibitor.company_logo ? convertToProxyUrl(exhibitor.company_logo, exhibitor.exhibitor_profile_id, 'Company_Logo') : exhibitor.company_logo,
+        cover_image: exhibitor.cover_image ? convertToProxyUrl(exhibitor.cover_image, exhibitor.exhibitor_profile_id, 'Cover_Image') : exhibitor.cover_image
       }));
     }
   }
