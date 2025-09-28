@@ -242,6 +242,8 @@ router.get('/', async (req, res) => {
         logger.warn(`⚠️ Custom API failed for ${eventId}: ${customError.message}`);
         
         // === FALLBACK: Try REST API ===
+        // COMMENTED OUT FOR TESTING - ONLY USE CUSTOM API
+        /*
         try {
           logger.info(`🔄 Falling back to REST API for: ${eventId}`);
           result = await fetchEventDetailsREST(eventId);
@@ -266,6 +268,10 @@ router.get('/', async (req, res) => {
             fallback_used: false
           });
         }
+        */
+        
+        // Just throw the custom API error for testing
+        throw new Error(`Custom API failed: ${customError.message}`);
       }
     } else {
       // === FRONTEND: Prefer REST API for WebP optimization ===
