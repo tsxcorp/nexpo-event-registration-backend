@@ -16,6 +16,7 @@ router.get('/proxy-image', async (req, res) => {
     }
 
     let downloadUrl;
+    let token = null;
     
     if (directUrl) {
       // Use direct URL from Custom API
@@ -27,7 +28,7 @@ router.get('/proxy-image', async (req, res) => {
       logger.info(`🖼️ Enhanced proxy image request: ${recordId}/${fieldName}/${filename} (${format}, quality: ${quality})`);
 
       // Get valid OAuth token with timeout
-      const token = await Promise.race([
+      token = await Promise.race([
         zohoOAuthService.getValidAccessToken(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('Token timeout')), 5000))
       ]);
