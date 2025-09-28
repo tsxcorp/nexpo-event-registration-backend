@@ -50,63 +50,71 @@ router.get('/proxy-image', async (req, res) => {
     let processedBuffer = Buffer.from(response.data);
     const originalSize = processedBuffer.length;
     
-    // Process image with Sharp for optimization
-    try {
-      const sharpInstance = sharp(processedBuffer);
-      
-      // Get image metadata
-      const metadata = await sharpInstance.metadata();
-      logger.info(`📊 Original image: ${metadata.width}x${metadata.height}, ${metadata.format}, ${originalSize} bytes`);
-      
-      // Apply transformations
-      if (width && parseInt(width) > 0) {
-        sharpInstance.resize(parseInt(width), null, {
-          withoutEnlargement: true, // Don't enlarge smaller images
-          fit: 'inside' // Maintain aspect ratio
-        });
-      }
-      
-      // Convert to requested format with quality
-      switch (format.toLowerCase()) {
-        case 'webp':
-          sharpInstance.webp({ 
-            quality: parseInt(quality),
-            effort: 6 // Higher effort = better compression
-          });
-          break;
-        case 'jpeg':
-        case 'jpg':
-          sharpInstance.jpeg({ 
-            quality: parseInt(quality),
-            progressive: true
-          });
-          break;
-        case 'png':
-          sharpInstance.png({ 
-            quality: parseInt(quality),
-            compressionLevel: 9
-          });
-          break;
-        case 'avif':
-          sharpInstance.avif({ 
-            quality: parseInt(quality)
-          });
-          break;
-        default:
-          // Keep original format if not specified
-          break;
-      }
-      
-      processedBuffer = await sharpInstance.toBuffer();
-      const processedSize = processedBuffer.length;
-      const compressionRatio = ((originalSize - processedSize) / originalSize * 100).toFixed(1);
-      
-      logger.info(`✅ Processed image: ${processedSize} bytes (${compressionRatio}% reduction)`);
-      
-    } catch (sharpError) {
-      logger.warn(`⚠️ Sharp processing failed, using original: ${sharpError.message}`);
-      // Fallback to original image
-    }
+            // Process image with Sharp for optimization
+            try {
+              const sharpInstance = sharp(processedBuffer);
+              
+              // Get image metadata first to check if format is supported
+              const metadata = await sharpInstance.metadata();
+              
+              // Check if image format is supported by Sharp
+              const supportedFormats = ['jpeg', 'jpg', 'png', 'webp', 'gif', 'svg', 'tiff', 'bmp', 'ico'];
+              if (!metadata.format || !supportedFormats.includes(metadata.format.toLowerCase())) {
+                logger.warn(`⚠️ Unsupported image format: ${metadata.format || 'unknown'}, using original`);
+                // Keep original buffer for unsupported formats
+              } else {
+                logger.info(`📊 Original image: ${metadata.width}x${metadata.height}, ${metadata.format}, ${originalSize} bytes`);
+                
+                // Apply transformations
+                if (width && parseInt(width) > 0) {
+                  sharpInstance.resize(parseInt(width), null, {
+                    withoutEnlargement: true, // Don't enlarge smaller images
+                    fit: 'inside' // Maintain aspect ratio
+                  });
+                }
+                
+                // Convert to requested format with quality
+                switch (format.toLowerCase()) {
+                  case 'webp':
+                    sharpInstance.webp({ 
+                      quality: parseInt(quality),
+                      effort: 6 // Higher effort = better compression
+                    });
+                    break;
+                  case 'jpeg':
+                  case 'jpg':
+                    sharpInstance.jpeg({ 
+                      quality: parseInt(quality),
+                      progressive: true
+                    });
+                    break;
+                  case 'png':
+                    sharpInstance.png({ 
+                      quality: parseInt(quality),
+                      compressionLevel: 9
+                    });
+                    break;
+                  case 'avif':
+                    sharpInstance.avif({ 
+                      quality: parseInt(quality)
+                    });
+                    break;
+                  default:
+                    // Keep original format if not specified
+                    break;
+                }
+                
+                processedBuffer = await sharpInstance.toBuffer();
+                const processedSize = processedBuffer.length;
+                const compressionRatio = ((originalSize - processedSize) / originalSize * 100).toFixed(1);
+                
+                logger.info(`✅ Processed image: ${processedSize} bytes (${compressionRatio}% reduction)`);
+              }
+              
+            } catch (sharpError) {
+              logger.warn(`⚠️ Sharp processing failed, using original: ${sharpError.message}`);
+              // Fallback to original image
+            }
 
     // Set appropriate headers
     const contentType = format.toLowerCase() === 'jpeg' ? 'image/jpeg' : `image/${format}`;
