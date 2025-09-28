@@ -100,16 +100,22 @@ const normalizeEventImages = (eventData, eventId) => {
  *   get:
  *     summary: Lấy thông tin sự kiện với automatic fallback và image optimization
  *     description: |
- *       **Unified API với intelligent fallback:**
+ *       **Unified API với conditional API selection:**
+ *       
+ *       **Frontend Mode** (`source=frontend`):
  *       1. **Primary**: REST API với WebP proxy images (tối ưu nhất)
  *       2. **Fallback**: Custom API với URL normalization (stable backup)
  *       
+ *       **Insight/Admin Mode** (`source=insight` hoặc `source=admin`):
+ *       1. **Primary**: Custom API cho stability (tốt nhất cho admin)
+ *       2. **Fallback**: REST API với WebP optimization (backup)
+ *       
  *       **Ưu điểm:**
- *       - ✅ Tự động fallback khi REST API lỗi
+ *       - ✅ Conditional API selection based on request source
  *       - ✅ WebP optimization cho tất cả images
  *       - ✅ Consistent proxy URLs (no Mixed Content)
- *       - ✅ Single endpoint cho frontend
- *       - ✅ Stable backup với Custom API
+ *       - ✅ Single endpoint cho tất cả clients
+ *       - ✅ Optimal performance cho từng use case
  *       
  *       **Modes:**
  *       - **Single Event**: Truyền eventId cụ thể (ví dụ: "4433256000012332047")
@@ -129,6 +135,25 @@ const normalizeEventImages = (eventData, eventId) => {
  *           all_events:
  *             summary: List All Events
  *             value: "NEXPO"
+ *       - in: query
+ *         name: source
+ *         required: false
+ *         schema:
+ *           type: string
+ *           enum: [frontend, insight, admin]
+ *           default: frontend
+ *         description: |
+ *           Request source để chọn API strategy phù hợp
+ *         examples:
+ *           frontend:
+ *             summary: Frontend (REST API priority)
+ *             value: "frontend"
+ *           insight:
+ *             summary: Insight (Custom API priority)
+ *             value: "insight"
+ *           admin:
+ *             summary: Admin (Custom API priority)
+ *             value: "admin"
  *     responses:
  *       200:
  *         description: Dữ liệu sự kiện thành công với optimized images
@@ -168,6 +193,7 @@ const normalizeEventImages = (eventData, eventId) => {
 
 router.get('/', async (req, res) => {
   const eventId = req.query.eventId;
+  const requestSource = req.query.source || 'frontend'; // Default to frontend
   
   if (!eventId) {
     return res.status(400).json({
@@ -183,26 +209,16 @@ router.get('/', async (req, res) => {
   let primaryError = null;
 
   try {
-    logger.info(`🔍 Fetching event data for: ${eventId}`);
+    logger.info(`🔍 Fetching event data for: ${eventId} (source: ${requestSource})`);
 
-    // === PRIMARY: Try REST API first (with WebP proxy images) ===
-    try {
-      logger.info(`📡 Attempting REST API for: ${eventId}`);
-      result = await fetchEventDetailsREST(eventId);
-      source = 'rest_api';
-      logger.info(`✅ REST API success for: ${eventId}`);
-      
-    } catch (restError) {
-      primaryError = restError;
-      logger.warn(`⚠️ REST API failed for ${eventId}: ${restError.message}`);
-      
-      // === FALLBACK: Try Custom API ===
+    // === CONDITIONAL API SELECTION BASED ON REQUEST SOURCE ===
+    if (requestSource === 'insight' || requestSource === 'admin') {
+      // === INSIGHT/ADMIN: Prefer Custom API for stability ===
       try {
-        logger.info(`🔄 Falling back to Custom API for: ${eventId}`);
+        logger.info(`📡 Attempting Custom API for: ${eventId} (insight/admin mode)`);
         result = await fetchEventDetails(eventId);
         source = 'custom_api';
-        fallbackUsed = true;
-        logger.info(`✅ Custom API fallback success for: ${eventId}`);
+        logger.info(`✅ Custom API success for: ${eventId}`);
         
         // === NORMALIZE: Convert Custom API direct URLs to proxy URLs ===
         logger.info(`🖼️ Normalizing Custom API image URLs to proxy format`);
@@ -210,21 +226,77 @@ router.get('/', async (req, res) => {
         logger.info(`✅ Image URLs normalized for consistent WebP optimization`);
         
       } catch (customError) {
-        logger.error(`❌ Both REST API and Custom API failed for ${eventId}`);
-        logger.error(`REST API error: ${primaryError.message}`);
-        logger.error(`Custom API error: ${customError.message}`);
+        primaryError = customError;
+        logger.warn(`⚠️ Custom API failed for ${eventId}: ${customError.message}`);
         
-        return res.status(500).json({
-          success: false,
-          error: 'All APIs failed',
-          message: 'Both REST API and Custom API are unavailable',
-          details: {
-            rest_api_error: primaryError.message,
-            custom_api_error: customError.message
-          },
-          source: 'none',
-          fallback_used: false
-        });
+        // === FALLBACK: Try REST API ===
+        try {
+          logger.info(`🔄 Falling back to REST API for: ${eventId}`);
+          result = await fetchEventDetailsREST(eventId);
+          source = 'rest_api';
+          fallbackUsed = true;
+          logger.info(`✅ REST API fallback success for: ${eventId}`);
+          
+        } catch (restError) {
+          logger.error(`❌ Both Custom API and REST API failed for ${eventId}`);
+          logger.error(`Custom API error: ${primaryError.message}`);
+          logger.error(`REST API error: ${restError.message}`);
+          
+          return res.status(500).json({
+            success: false,
+            error: 'All APIs failed',
+            message: 'Both Custom API and REST API are unavailable',
+            details: {
+              custom_api_error: primaryError.message,
+              rest_api_error: restError.message
+            },
+            source: 'none',
+            fallback_used: false
+          });
+        }
+      }
+    } else {
+      // === FRONTEND: Prefer REST API for WebP optimization ===
+      try {
+        logger.info(`📡 Attempting REST API for: ${eventId} (frontend mode)`);
+        result = await fetchEventDetailsREST(eventId);
+        source = 'rest_api';
+        logger.info(`✅ REST API success for: ${eventId}`);
+        
+      } catch (restError) {
+        primaryError = restError;
+        logger.warn(`⚠️ REST API failed for ${eventId}: ${restError.message}`);
+        
+        // === FALLBACK: Try Custom API ===
+        try {
+          logger.info(`🔄 Falling back to Custom API for: ${eventId}`);
+          result = await fetchEventDetails(eventId);
+          source = 'custom_api';
+          fallbackUsed = true;
+          logger.info(`✅ Custom API fallback success for: ${eventId}`);
+          
+          // === NORMALIZE: Convert Custom API direct URLs to proxy URLs ===
+          logger.info(`🖼️ Normalizing Custom API image URLs to proxy format`);
+          result = normalizeEventImages(result, eventId);
+          logger.info(`✅ Image URLs normalized for consistent WebP optimization`);
+          
+        } catch (customError) {
+          logger.error(`❌ Both REST API and Custom API failed for ${eventId}`);
+          logger.error(`REST API error: ${primaryError.message}`);
+          logger.error(`Custom API error: ${customError.message}`);
+          
+          return res.status(500).json({
+            success: false,
+            error: 'All APIs failed',
+            message: 'Both REST API and Custom API are unavailable',
+            details: {
+              rest_api_error: primaryError.message,
+              custom_api_error: customError.message
+            },
+            source: 'none',
+            fallback_used: false
+          });
+        }
       }
     }
     
