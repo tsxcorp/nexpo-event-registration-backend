@@ -51,17 +51,76 @@ const convertToProxyUrl = (url, recordId, fieldName) => {
 };
 
 /**
+ * Convert direct Zoho URL to proxy URL for WebP optimization
+ */
+const convertDirectUrlToProxy = (directUrl) => {
+  if (!directUrl) return directUrl;
+  
+  // If already a proxy URL, return as is
+  if (directUrl.includes('/api/proxy-image')) return directUrl;
+  
+  let baseUrl = process.env.BACKEND_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'http://localhost:3000';
+  
+  // Ensure HTTPS protocol for production URLs
+  if (baseUrl && !baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+  
+  // Encode the direct URL for proxy
+  return `${baseUrl}/api/proxy-image?directUrl=${encodeURIComponent(directUrl)}&format=webp&quality=80`;
+};
+
+/**
  * Normalize image URLs in event data to use proxy URLs
  * Only applies to REST API responses, not Custom API (which already has direct URLs)
  */
 const normalizeEventImages = (eventData, eventId, source) => {
   if (!eventData || !eventId) return eventData;
   
-  // Custom API provides direct Zoho URLs but they need authentication
-  // So we still use proxy URLs for better performance and WebP optimization
-  // if (source === 'custom_api') {
-  //   return eventData;
-  // }
+  // Custom API provides direct Zoho URLs - convert them to proxy URLs for WebP optimization
+  if (source === 'custom_api') {
+    // Handle single event mode
+    if (eventData.event) {
+      const event = eventData.event;
+      
+      // Convert all image fields to proxy URLs
+      if (event.logo) event.logo = convertDirectUrlToProxy(event.logo);
+      if (event.banner) event.banner = convertDirectUrlToProxy(event.banner);
+      if (event.header) event.header = convertDirectUrlToProxy(event.header);
+      if (event.footer) event.footer = convertDirectUrlToProxy(event.footer);
+      if (event.favicon) event.favicon = convertDirectUrlToProxy(event.favicon);
+      if (event.floor_plan_pdf) event.floor_plan_pdf = convertDirectUrlToProxy(event.floor_plan_pdf);
+      
+      // Convert exhibitor images
+      if (event.exhibitors && Array.isArray(event.exhibitors)) {
+        event.exhibitors = event.exhibitors.map(exhibitor => ({
+          ...exhibitor,
+          company_logo: exhibitor.company_logo ? convertDirectUrlToProxy(exhibitor.company_logo) : exhibitor.company_logo,
+          cover_image: exhibitor.cover_image ? convertDirectUrlToProxy(exhibitor.cover_image) : exhibitor.cover_image
+        }));
+      }
+    }
+    
+    // Handle list mode (multiple events)
+    if (eventData.events && Array.isArray(eventData.events)) {
+      eventData.events = eventData.events.map(event => ({
+        ...event,
+        logo: event.logo ? convertDirectUrlToProxy(event.logo) : event.logo,
+        banner: event.banner ? convertDirectUrlToProxy(event.banner) : event.banner,
+        header: event.header ? convertDirectUrlToProxy(event.header) : event.header,
+        footer: event.footer ? convertDirectUrlToProxy(event.footer) : event.footer,
+        favicon: event.favicon ? convertDirectUrlToProxy(event.favicon) : event.favicon,
+        floor_plan_pdf: event.floor_plan_pdf ? convertDirectUrlToProxy(event.floor_plan_pdf) : event.floor_plan_pdf,
+        exhibitors: event.exhibitors ? event.exhibitors.map(exhibitor => ({
+          ...exhibitor,
+          company_logo: exhibitor.company_logo ? convertDirectUrlToProxy(exhibitor.company_logo) : exhibitor.company_logo,
+          cover_image: exhibitor.cover_image ? convertDirectUrlToProxy(exhibitor.cover_image) : exhibitor.cover_image
+        })) : event.exhibitors
+      }));
+    }
+    
+    return eventData;
+  }
   
   // Handle single event mode
   if (eventData.event) {
@@ -242,8 +301,6 @@ router.get('/', async (req, res) => {
         logger.warn(`⚠️ Custom API failed for ${eventId}: ${customError.message}`);
         
         // === FALLBACK: Try REST API ===
-        // COMMENTED OUT FOR TESTING - ONLY USE CUSTOM API
-        /*
         try {
           logger.info(`🔄 Falling back to REST API for: ${eventId}`);
           result = await fetchEventDetailsREST(eventId);
@@ -268,10 +325,6 @@ router.get('/', async (req, res) => {
             fallback_used: false
           });
         }
-        */
-        
-        // Just throw the custom API error for testing
-        throw new Error(`Custom API failed: ${customError.message}`);
       }
     } else {
       // === FRONTEND: Prefer REST API for WebP optimization ===

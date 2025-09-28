@@ -8,44 +8,61 @@ const logger = require('../utils/logger');
 // Enhanced proxy image endpoint with WebP conversion
 router.get('/proxy-image', async (req, res) => {
   try {
-    const { recordId, fieldName, filename, quality = 80, width, format = 'webp' } = req.query;
+    const { recordId, fieldName, filename, quality = 80, width, format = 'webp', directUrl } = req.query;
     
-    if (!recordId || !fieldName || !filename) {
-      return res.status(400).json({ error: 'Missing required parameters: recordId, fieldName, filename' });
+    // Support both direct URL and parameter-based URLs
+    if (!directUrl && (!recordId || !fieldName || !filename)) {
+      return res.status(400).json({ error: 'Missing required parameters: either directUrl or (recordId, fieldName, filename)' });
     }
 
-    logger.info(`🖼️ Enhanced proxy image request: ${recordId}/${fieldName}/${filename} (${format}, quality: ${quality})`);
-
-    // Get valid OAuth token with timeout
-    const token = await Promise.race([
-      zohoOAuthService.getValidAccessToken(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Token timeout')), 5000))
-    ]);
+    let downloadUrl;
     
-    if (!token) {
-      logger.error('❌ Failed to get valid OAuth token');
-      return res.status(401).json({ error: 'Failed to get valid OAuth token' });
+    if (directUrl) {
+      // Use direct URL from Custom API
+      downloadUrl = decodeURIComponent(directUrl);
+      logger.info(`🖼️ Enhanced proxy image request: Direct URL (${format}, quality: ${quality})`);
+      logger.info(`Proxying direct image: ${downloadUrl}`);
+    } else {
+      // Build REST API URL
+      logger.info(`🖼️ Enhanced proxy image request: ${recordId}/${fieldName}/${filename} (${format}, quality: ${quality})`);
+
+      // Get valid OAuth token with timeout
+      const token = await Promise.race([
+        zohoOAuthService.getValidAccessToken(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Token timeout')), 5000))
+      ]);
+      
+      if (!token) {
+        logger.error('❌ Failed to get valid OAuth token');
+        return res.status(401).json({ error: 'Failed to get valid OAuth token' });
+      }
+
+      // Build Zoho Creator REST API download URL
+      const ZOHO_BASE_URL = process.env.ZOHO_BASE_URL || 'https://www.zohoapis.com';
+      const ZOHO_ORG_NAME = process.env.ZOHO_ORG_NAME;
+      
+      downloadUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/API_Events/${recordId}/${fieldName}/download?filepath=${encodeURIComponent(filename)}`;
+      
+      logger.info(`Proxying image: ${downloadUrl}`);
     }
-
-    // Build Zoho Creator REST API download URL
-    const ZOHO_BASE_URL = process.env.ZOHO_BASE_URL || 'https://www.zohoapis.com';
-    const ZOHO_ORG_NAME = process.env.ZOHO_ORG_NAME;
-    
-    const downloadUrl = `${ZOHO_BASE_URL}/creator/v2.1/data/${ZOHO_ORG_NAME}/nxp/report/API_Events/${recordId}/${fieldName}/download?filepath=${encodeURIComponent(filename)}`;
-    
-    logger.info(`Proxying image: ${downloadUrl}`);
 
     // Fetch image from Zoho Creator as buffer (more reliable than stream)
-    const response = await axios.get(downloadUrl, {
+    const requestConfig = {
       headers: {
-        'Authorization': `Zoho-oauthtoken ${token}`,
         'User-Agent': 'NEXPO-Backend/1.0'
       },
       responseType: 'arraybuffer', // Use buffer instead of stream
       timeout: 30000, // 30 seconds timeout
       maxRedirects: 0, // Prevent redirect issues
       maxContentLength: 20 * 1024 * 1024 // 20MB max image size
-    });
+    };
+    
+    // Only add Authorization header for REST API URLs
+    if (!directUrl) {
+      requestConfig.headers['Authorization'] = `Zoho-oauthtoken ${token}`;
+    }
+    
+    const response = await axios.get(downloadUrl, requestConfig);
 
     let processedBuffer = Buffer.from(response.data);
     const originalSize = processedBuffer.length;
