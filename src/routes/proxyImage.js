@@ -20,7 +20,13 @@ router.get('/proxy-image', async (req, res) => {
     
     if (directUrl) {
       // Use direct URL from Custom API
-      downloadUrl = decodeURIComponent(directUrl);
+      // Handle double encoding from Next.js Image component
+      let decodedUrl = decodeURIComponent(directUrl);
+      // If still encoded, decode again (double encoding)
+      if (decodedUrl.includes('%')) {
+        decodedUrl = decodeURIComponent(decodedUrl);
+      }
+      downloadUrl = decodedUrl;
       logger.info(`🖼️ Enhanced proxy image request: Direct URL (${format}, quality: ${quality})`);
       logger.info(`Proxying direct image: ${downloadUrl}`);
     } else {
