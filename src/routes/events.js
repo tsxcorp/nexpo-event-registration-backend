@@ -52,9 +52,16 @@ const convertToProxyUrl = (url, recordId, fieldName) => {
 
 /**
  * Normalize image URLs in event data to use proxy URLs
+ * Only applies to REST API responses, not Custom API (which already has direct URLs)
  */
-const normalizeEventImages = (eventData, eventId) => {
+const normalizeEventImages = (eventData, eventId, source) => {
   if (!eventData || !eventId) return eventData;
+  
+  // Custom API provides direct Zoho URLs but they need authentication
+  // So we still use proxy URLs for better performance and WebP optimization
+  // if (source === 'custom_api') {
+  //   return eventData;
+  // }
   
   // Handle single event mode
   if (eventData.event) {
@@ -227,7 +234,7 @@ router.get('/', async (req, res) => {
         
         // === NORMALIZE: Convert Custom API direct URLs to proxy URLs ===
         logger.info(`🖼️ Normalizing Custom API image URLs to proxy format`);
-        result = normalizeEventImages(result, eventId);
+        result = normalizeEventImages(result, eventId, source);
         logger.info(`✅ Image URLs normalized for consistent WebP optimization`);
         
       } catch (customError) {
@@ -282,7 +289,7 @@ router.get('/', async (req, res) => {
           
           // === NORMALIZE: Convert Custom API direct URLs to proxy URLs ===
           logger.info(`🖼️ Normalizing Custom API image URLs to proxy format`);
-          result = normalizeEventImages(result, eventId);
+          result = normalizeEventImages(result, eventId, source);
           logger.info(`✅ Image URLs normalized for consistent WebP optimization`);
           
         } catch (customError) {
@@ -307,7 +314,7 @@ router.get('/', async (req, res) => {
     
     // === NORMALIZE: Always normalize image URLs for consistency ===
     logger.info(`🖼️ Normalizing image URLs for consistent WebP optimization`);
-    result = normalizeEventImages(result, eventId);
+    result = normalizeEventImages(result, eventId, source);
     logger.info(`✅ Image URLs normalized for consistent WebP optimization`);
 
     // Add metadata to response
